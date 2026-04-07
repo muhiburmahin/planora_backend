@@ -1,0 +1,13 @@
+model Invitation {
+  id         String        @id @default(uuid())
+  eventId    String
+  senderId   String
+  receiverId String
+  status     RequestStatus @default(PENDING)
+  
+  event    Event @relation(fields: [eventId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  sender   User  @relation("Sender", fields: [senderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  receiver User  @relation("Receiver", fields: [receiverId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@map("invitations")
+}
