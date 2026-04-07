@@ -1,23 +1,23 @@
 model User {
-  id            String     @id @default(uuid())
+  id            String    @id @default(uuid())
   name          String
-  email         String     @unique
-  emailVerified Boolean    @default(false)
+  email         String    @unique
+  emailVerified Boolean   @default(false)
   image         String?
-  role          Role       @default(USER)
-  status        UserStatus @default(ACTIVE)
   
-  needPasswordChange Boolean   @default(false)
-  isDeleted          Boolean   @default(false)
+  role               Role        @default(USER)
+  status             UserStatus  @default(ACTIVE)
+  needPasswordChange Boolean     @default(false)
+  isDeleted          Boolean     @default(false)
   deletedAt          DateTime?
 
-  sessions       Session[]
-  accounts       Account[]
-  profile        Profile?
-  events         Event[]         @relation("OrganizerEvents")
+  sessions      Session[]
+  accounts      Account[]
+  profile       Profile?
+  events        Event[]         @relation("OrganizerEvents")
   participations Participation[]
-  reviews        Review[]
-  notifications  Notification[]
+  reviews       Review[]
+  notifications Notification[]
   sentInvitations     Invitation[] @relation("Sender")
   receivedInvitations Invitation[] @relation("Receiver")
 
@@ -36,7 +36,11 @@ model Session {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@map("sessions")
+  @@index([userId])
 }
 
 model Account {
@@ -52,7 +56,12 @@ model Account {
   accessTokenExpiresAt  DateTime?
   refreshTokenExpiresAt DateTime?
 
+  scope     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@map("accounts")
+  @@index([userId])
 }
 
 model Verification {
@@ -61,5 +70,9 @@ model Verification {
   value      String
   expiresAt  DateTime
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@map("verifications")
+  @@index([identifier])
 }

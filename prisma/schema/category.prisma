@@ -1,7 +1,10 @@
 model Category {
-  id     String  @id @default(uuid())
-  name   String  @unique
-  events Event[]
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  isDeleted   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  @@map("categories")
+  events      Event[]
 }
