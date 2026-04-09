@@ -7,6 +7,7 @@ model User {
   
   role               Role        @default(USER)
   status             UserStatus  @default(ACTIVE)
+  password      String
   needPasswordChange Boolean     @default(false)
   isDeleted          Boolean     @default(false)
   deletedAt          DateTime?

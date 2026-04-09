@@ -26,7 +26,7 @@ const globalErrorHandler = (err: any, req: Request, res: Response, next: NextFun
         errorSources = [...simplifiedError.errorSources];
         stack = err.stack;
     }
-    // ২. Prisma Known Error (যেমন: P2025 - Record not found)
+
     else if (err.code === 'P2025') {
         statusCode = status.NOT_FOUND;
         message = "The record you are looking for does not exist!";

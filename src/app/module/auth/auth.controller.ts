@@ -1,31 +1,52 @@
-// /* eslint-disable @typescript-eslint/no-explicit-any */
-// import { Request, Response } from "express";
-// import { AuthService } from "./auth.service";
+import { Request, Response } from "express";
+import httpStatus from "http-status";
+import { AuthService } from "./auth.service";
+import catchAsync from "../../shared/catchAsync";
+import sendResponse from "../../shared/sendResponse";
 
-// const registerUser = async (req: Request, res: Response) => {
-//     try {
-//         const result = await AuthService.register(req.body);
-//         res.status(201).json({
-//             success: true,
-//             message: "User registered successfully!",
-//             data: result
-//         });
-//     } catch (err: any) {
-//         res.status(500).json({ success: false, message: err.message });
-//     }
-// };
+const registerUser = catchAsync(async (req: Request, res: Response) => {
+    const result = await AuthService.registerUser(req.body);
+    const { accessToken, refreshToken, user } = result;
 
-// const loginUser = async (req: Request, res: Response) => {
-//     try {
-//         const result = await AuthService.login(req.body);
-//         res.status(200).json({
-//             success: true,
-//             message: "User logged in successfully!",
-//             data: result
-//         });
-//     } catch (err: any) {
-//         res.status(401).json({ success: false, message: err.message });
-//     }
-// };
+    res.cookie('refreshToken', refreshToken, {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+    });
 
-// export const AuthController = { registerUser, loginUser };
+    sendResponse(res, {
+        statusCode: httpStatus.CREATED,
+        success: true,
+        message: "User registered successfully!",
+        data: {
+            accessToken,
+            refreshToken,
+            user
+        },
+    });
+});
+
+const loginUser = catchAsync(async (req: Request, res: Response) => {
+    const result = await AuthService.loginUser(req.body);
+    const { accessToken, refreshToken, user } = result;
+
+    res.cookie('refreshToken', refreshToken, {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+    });
+
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: "User logged in successfully!",
+        data: {
+            accessToken,
+            refreshToken,
+            user
+        },
+    });
+});
+
+export const AuthController = {
+    registerUser,
+    loginUser
+};
