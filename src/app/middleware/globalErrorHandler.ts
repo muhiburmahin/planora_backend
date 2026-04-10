@@ -6,7 +6,7 @@ import z from "zod";
 import { envVars } from "../config/env";
 import { handleZodError } from "../errorHelpers/handleZodError";
 import { TErrorResponse, TErrorSources } from "../interfaces/error.interface";
-import AppError from "./appError";
+import AppError from "../errorHelpers/appError";
 
 const globalErrorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
     if (envVars.NODE_ENV === 'development') {

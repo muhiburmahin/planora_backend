@@ -1,25 +1,42 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextFunction, Request, Response } from "express";
-import jwt, { JwtPayload } from "jsonwebtoken";
-import { envVars } from "../config/env";
 import httpStatus from "http-status";
-import AppError from "./appError";
+import { envVars } from "../config/env";
+import { jwtUtils } from "../utils/jwt";
+import AppError from "../errorHelpers/appError";
 
 const auth = (...roles: string[]) => {
     return async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const token = req.headers.authorization;
-            if (!token) throw new AppError(httpStatus.UNAUTHORIZED, "You are not authorized!");
+            const authHeader = req.headers.authorization;
+            let token: string | undefined;
 
-            const decoded = jwt.verify(token, envVars.JWT_ACCESS_SECRET as string) as JwtPayload;
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                token = authHeader.split(' ')[1];
+            } else if (req.cookies && req.cookies.accessToken) {
+                token = req.cookies.accessToken;
+            }
+
+            if (!token) {
+                throw new AppError(httpStatus.UNAUTHORIZED, "You are not authorized! Token missing.");
+            }
+
+            const result = jwtUtils.verifyToken(token, envVars.JWT_ACCESS_SECRET as string);
+
+            if (!result.success) {
+                throw new AppError(httpStatus.UNAUTHORIZED, "Invalid or expired token!");
+            }
+
+            const decoded = result.data as any;
 
             if (roles.length && !roles.includes(decoded.role)) {
-                throw new AppError(httpStatus.FORBIDDEN, "Forbidden access!");
+                throw new AppError(httpStatus.FORBIDDEN, "You do not have permission to access this resource!");
             }
 
             req.user = decoded;
             next();
-        } catch (err) {
-            next(new AppError(httpStatus.UNAUTHORIZED, "Invalid or expired token!"));
+        } catch (err: any) {
+            next(err);
         }
     };
 };

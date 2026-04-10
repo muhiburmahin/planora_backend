@@ -1,12 +1,20 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import jwt, { JwtPayload, Secret, SignOptions } from "jsonwebtoken";
 
-const createToken = (payload: JwtPayload, secret: Secret, options: SignOptions) => {
+const createToken = (
+    payload: Record<string, unknown>,
+    secret: Secret,
+    options: SignOptions
+): string => {
     return jwt.sign(payload, secret, options);
 };
 
 const verifyToken = (token: string, secret: Secret) => {
     try {
+        if (!secret) {
+            throw new Error("JWT Secret is missing!");
+        }
+
         const decoded = jwt.verify(token, secret) as JwtPayload;
         return {
             success: true,
@@ -16,12 +24,11 @@ const verifyToken = (token: string, secret: Secret) => {
         return {
             success: false,
             message: error.message || "Token verification failed",
-            error,
         };
     }
 };
 
-const decodeToken = (token: string) => {
+const decodeToken = (token: string): JwtPayload | null => {
     return jwt.decode(token) as JwtPayload;
 };
 

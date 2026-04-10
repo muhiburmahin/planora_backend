@@ -1,77 +1,89 @@
-import bcrypt from 'bcrypt';
-import httpStatus from 'http-status';
-import { prisma } from '../../lib/prisma';
-import { envVars } from '../../config/env';
-import AppError from '../../middleware/appError';
-import { tokenUtils } from '../../utils/token';
-import { IJWTPayload, IUser } from './auth.interface';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import status from "http-status";
+import { auth } from "../../lib/auth";
+import { prisma } from "../../lib/prisma";
+import { tokenUtils } from "../../utils/token";
+import { IRegisterUserPayload, ILoginUserPayload, IJWTPayload } from "./auth.interface";
+import AppError from "../../errorHelpers/appError";
 
-const registerUser = async (payload: IUser) => {
-    const isExist = await prisma.user.findUnique({
-        where: { email: payload.email }
-    });
-
-    if (isExist) throw new AppError(httpStatus.BAD_REQUEST, "User already exists!");
-    const hashedPassword = await bcrypt.hash(
-        payload.password as string,
-        Number(envVars.BCRYPT_SALT_ROUNDS)
-    );
-    const result = await prisma.user.create({
-        data: {
-            ...payload,
-            password: hashedPassword
+const registerUser = async (payload: IRegisterUserPayload) => {
+    const data: any = await auth.api.signUpEmail({
+        body: {
+            name: payload.name,
+            email: payload.email,
+            password: payload.password,
         }
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password: _, ...userData } = result;
-    const jwtPayload: IJWTPayload = {
-        id: result.id,
-        email: result.email,
-        role: result.role
-    };
-
-    const accessToken = tokenUtils.getAccessToken(jwtPayload);
-    const refreshToken = tokenUtils.getRefreshToken(jwtPayload);
-
-    return {
-        accessToken,
-        refreshToken,
-        user: userData
-    };
-};
-
-const loginUser = async (payload: Pick<IUser, 'email' | 'password'>) => {
-    const user = await prisma.user.findUnique({
-        where: { email: payload.email }
-    });
-
-    if (!user || user.isDeleted || user.status === 'BLOCKED') {
-        throw new AppError(httpStatus.NOT_FOUND, "User not found or blocked!");
+    if (!data || !data.user) {
+        throw new AppError(status.BAD_REQUEST, "Failed to create user in Auth system");
     }
 
-    const isMatch = await bcrypt.compare(payload.password as string, user.password);
-    if (!isMatch) throw new AppError(httpStatus.FORBIDDEN, "Password incorrect!");
+    try {
+        const profileData = await prisma.$transaction(async (tx) => {
+            const result = await tx.profile.create({
+                data: {
+                    userId: data.user.id,
+                    bio: "",
+                    contactNumber: "",
+                    address: ""
+                }
+            });
+            return result;
+        });
+
+        const jwtPayload: IJWTPayload = {
+            id: data.user.id,
+            email: data.user.email,
+            role: data.user.role as any,
+        };
+
+        const accessToken = tokenUtils.getAccessToken(jwtPayload);
+        const refreshToken = tokenUtils.getRefreshToken(jwtPayload);
+
+        return {
+            token: data.session?.token || data.token,
+            accessToken,
+            refreshToken,
+            sessionToken: data.token || data.session?.token,
+            user: data.user,
+            profile: profileData
+        };
+
+    } catch (error: any) {
+        await prisma.user.delete({ where: { id: data.user.id } });
+        throw new AppError(status.INTERNAL_SERVER_ERROR, error.message || "Registration failed");
+    }
+};
+
+const loginUser = async (payload: ILoginUserPayload) => {
+    const data: any = await auth.api.signInEmail({
+        body: {
+            email: payload.email,
+            password: payload.password,
+        }
+    });
+
+    if (!data || !data.user) {
+        throw new AppError(status.UNAUTHORIZED, "Invalid email or password");
+    }
+
     const jwtPayload: IJWTPayload = {
-        id: user.id,
-        email: user.email,
-        role: user.role
+        id: data.user.id,
+        email: data.user.email,
+        role: data.user.role as any,
     };
 
     const accessToken = tokenUtils.getAccessToken(jwtPayload);
     const refreshToken = tokenUtils.getRefreshToken(jwtPayload);
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password: _, ...userData } = user;
-
     return {
+        token: data.session?.token || data.token,
         accessToken,
         refreshToken,
-        user: userData
+        sessionToken: data.token || data.session?.token,
+        user: data.user
     };
 };
 
-export const AuthService = {
-    registerUser,
-    loginUser
-};
+export const AuthService = { registerUser, loginUser };

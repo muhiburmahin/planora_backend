@@ -1,5 +1,17 @@
 import { Role, UserStatus } from "../../../generated/prisma/client";
 
+
+export interface IRegisterUserPayload {
+    name: string;
+    email: string;
+    password: string;
+}
+
+export interface ILoginUserPayload {
+    email: string;
+    password: string;
+}
+
 export interface IUser {
     id: string;
     name: string;
@@ -7,8 +19,8 @@ export interface IUser {
     password?: string;
     emailVerified: boolean;
     image?: string | null;
-    role: Role; // USER | ADMIN
-    status: UserStatus; // ACTIVE | BLOCKED
+    role: Role;
+    status: UserStatus;
     needPasswordChange: boolean;
     isDeleted: boolean;
     deletedAt?: Date | null;
@@ -16,15 +28,15 @@ export interface IUser {
     updatedAt: Date;
 }
 
-export interface ILoginResponse {
-    accessToken: string;
-    refreshToken: string;
-}
-
 export interface IJWTPayload {
     id: string;
     email: string;
     role: Role;
+}
+
+export interface ILoginResponse {
+    accessToken: string;
+    refreshToken: string;
 }
 
 export interface ICookieOptions {
