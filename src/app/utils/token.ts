@@ -1,24 +1,24 @@
 import { Response } from "express";
-import { JwtPayload, Secret, SignOptions } from "jsonwebtoken";
-import { jwtUtils } from "./jwt";
+import jwt, { JwtPayload, Secret, SignOptions } from "jsonwebtoken";
 import { CookieUtils } from './cookie';
 import { envVars } from "../config/env";
 
 const getAccessToken = (payload: JwtPayload) => {
-    return jwtUtils.createToken(
-        payload,
-        envVars.JWT_ACCESS_SECRET as Secret,
-        { expiresIn: envVars.JWT_ACCESS_EXPIRES_IN as string } as SignOptions
-    );
+    return jwt.sign(payload, envVars.JWT_ACCESS_SECRET as string, {
+        expiresIn: envVars.JWT_ACCESS_EXPIRES_IN as SignOptions['expiresIn'],
+    });
 };
 
 const getRefreshToken = (payload: JwtPayload) => {
-    return jwtUtils.createToken(
-        payload,
-        envVars.JWT_REFRESH_SECRET as Secret,
-        { expiresIn: envVars.JWT_REFRESH_EXPIRES_IN as string } as SignOptions
-    );
+    return jwt.sign(payload, envVars.JWT_REFRESH_SECRET as string, {
+        expiresIn: envVars.JWT_REFRESH_EXPIRES_IN as SignOptions['expiresIn'],
+    });
 };
+
+const verifyToken = (token: string, secret: string) => {
+    return jwt.verify(token, secret as Secret) as JwtPayload;
+};
+
 
 const setTokensInCookies = (res: Response, accessToken: string, refreshToken: string) => {
     const isProduction = envVars.NODE_ENV === 'production';
@@ -29,16 +29,15 @@ const setTokensInCookies = (res: Response, accessToken: string, refreshToken: st
         secure: isProduction,
         sameSite: isProduction ? "none" : "lax",
         path: '/',
-        maxAge: 1000 * 60 * 60 * 24, // 1 day
+        maxAge: 1000 * 60 * 60 * 24, // 1 Day
     });
 
-    // Refresh Token Cookie
     CookieUtils.setCookie(res, 'refreshToken', refreshToken, {
         httpOnly: true,
         secure: isProduction,
         sameSite: isProduction ? "none" : "lax",
         path: '/',
-        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 Days
     });
 };
 
@@ -50,13 +49,14 @@ const setBetterAuthSessionCookie = (res: Response, token: string) => {
         secure: isProduction,
         sameSite: isProduction ? "none" : "lax",
         path: '/',
-        maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
+        maxAge: 1000 * 60 * 60 * 24 * 30, // 30 Days
     });
 };
 
 export const tokenUtils = {
     getAccessToken,
     getRefreshToken,
+    verifyToken,
     setTokensInCookies,
     setBetterAuthSessionCookie,
 };

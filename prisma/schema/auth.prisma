@@ -1,26 +1,33 @@
 model User {
-  id            String    @id @default(uuid())
-  name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
-  image         String?
+  id                 String      @id @default(uuid())
+  name               String
+  email              String      @unique
+  emailVerified      Boolean     @default(false)
+  image              String?
   
   role               Role        @default(USER)
   status             UserStatus  @default(ACTIVE)
-  password      String?
+  password           String?
+  
+  passwordResetToken   String?  
+  passwordResetExpires DateTime? 
+  verificationToken    String?   
+  lastLogin            DateTime?
+  
+
   needPasswordChange Boolean     @default(false)
   isDeleted          Boolean     @default(false)
   deletedAt          DateTime?
 
-  sessions      Session[]
-  accounts      Account[]
-  profile       Profile?
-  events        Event[]         @relation("OrganizerEvents")
-  participations Participation[]
-  reviews       Review[]
-  notifications Notification[]
-  sentInvitations     Invitation[] @relation("Sender")
-  receivedInvitations Invitation[] @relation("Receiver")
+  sessions           Session[]
+  accounts           Account[]
+  profile            Profile?
+  events             Event[]         @relation("OrganizerEvents")
+  participations     Participation[]
+  reviews            Review[]
+  notifications      Notification[]
+  sentInvitations    Invitation[]    @relation("Sender")
+  receivedInvitations Invitation[]   @relation("Receiver")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
