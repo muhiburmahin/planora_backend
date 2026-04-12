@@ -3,6 +3,7 @@ import { CategoryRoutes } from "../module/category/category.route";
 import { EventRoutes } from "../module/event/event.route";
 import { AuthRoutes } from "../module/auth/auth.route";
 import { ParticipationRoutes } from "../module/participation/participation.route";
+import { NotificationRoutes } from "../module/notification/notification.route";
 
 const router = Router();
 
@@ -22,7 +23,12 @@ const moduleRoutes = [
     {
         path: "/participations",
         route: ParticipationRoutes
+    },
+    {
+        path: "/notifications",
+        route: NotificationRoutes
     }
+
 
 ];
 

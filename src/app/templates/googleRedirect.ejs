@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Login - Planora</title>
+</head>
+<body>
+    <div style="text-align: center; margin-top: 50px;">
+        <p id="status-text">Redirecting to Google... Please wait.</p>
+    </div>
+
+    <script>
+    (async () => {
+        try {
+            let baseUrl = "<%= betterAuthUrl %>".trim();
+            if (baseUrl.endsWith('/')) {
+                baseUrl = baseUrl.slice(0, -1);
+            }
+
+            const finalUrl = `${baseUrl}/sign-in/social`;
+            console.log("Full Fetch URL:", finalUrl); 
+
+            const response = await fetch(finalUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    provider: "google",
+                    callbackURL: "<%= callbackURL %>"
+                })
+            });
+
+            const data = await response.json();
+            
+            if (response.ok && data.url) {
+                window.location.href = data.url;
+            } else {
+                throw new Error(data.message || `Server responded with ${response.status}`);
+            }
+        } catch (error) {
+            console.error("Critical Auth Error:", error);
+            document.body.innerHTML = `<h3 style="color:red; text-align:center;">
+                Auth Failed: ${error.message}<br>
+                <small>Check Browser Console (F12) for details</small>
+            </h3>`;
+        }
+    })();
+</script>
+</body>
+</html>

@@ -152,23 +152,28 @@ const logoutUser = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
-
-
 const googleLogin = catchAsync(async (req: Request, res: Response) => {
     const redirectPath = (req.query.redirect as string) || "/dashboard";
     const encodedRedirectPath = encodeURIComponent(redirectPath);
 
-    const callbackURL = `${envVars.BACKEND_URL}/api/v1/auth/google/success?redirect=${encodedRedirectPath}`;
+    const callbackURL = `${process.env.BACKEND_URL}/api/v1/auth/google/success?redirect=${encodedRedirectPath}`;
 
-    res.redirect(`${envVars.BACKEND_URL}/api/v1/auth/login/social?provider=google&callbackURL=${callbackURL}`);
+    console.log("BETTER_AUTH_URL from Env:", process.env.BETTER_AUTH_URL);
+    console.log("Generated Callback URL:", callbackURL);
+
+    res.render("googleRedirect", {
+        callbackURL: callbackURL,
+        betterAuthUrl: process.env.BETTER_AUTH_URL || "http://localhost:5000/api/auth",
+    });
 });
 
 const googleLoginSuccess = catchAsync(async (req: Request, res: Response) => {
     const redirectPath = (req.query.redirect as string) || "/dashboard";
+
     const sessionToken = req.cookies["better-auth.session_token"];
 
     if (!sessionToken) {
-        return res.redirect(`${envVars.FRONTEND_URL}/login?error=oauth_failed`);
+        return res.redirect(`${process.env.FRONTEND_URL}/login?error=oauth_failed`);
     }
 
     const session = await auth.api.getSession({
@@ -178,7 +183,7 @@ const googleLoginSuccess = catchAsync(async (req: Request, res: Response) => {
     });
 
     if (!session || !session.user) {
-        return res.redirect(`${envVars.FRONTEND_URL}/login?error=no_session_found`);
+        return res.redirect(`${process.env.FRONTEND_URL}/login?error=no_session_found`);
     }
 
     const result = await AuthService.googleLoginSuccess(session);
@@ -189,12 +194,12 @@ const googleLoginSuccess = catchAsync(async (req: Request, res: Response) => {
     const isValidRedirectPath = redirectPath.startsWith("/") && !redirectPath.startsWith("//");
     const finalRedirectPath = isValidRedirectPath ? redirectPath : "/dashboard";
 
-    res.redirect(`${envVars.FRONTEND_URL}${finalRedirectPath}`);
+    res.redirect(`${process.env.FRONTEND_URL}${finalRedirectPath}`);
 });
 
 const handleOAuthError = catchAsync((req: Request, res: Response) => {
     const error = (req.query.error as string) || "oauth_failed";
-    res.redirect(`${envVars.FRONTEND_URL}/login?error=${error}`);
+    res.redirect(`${process.env.FRONTEND_URL}/login?error=${error}`);
 });
 export const AuthController = {
     registerUser,

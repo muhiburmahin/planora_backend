@@ -2,12 +2,15 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./prisma";
 import { envVars } from "../config/env";
+import { Role, UserStatus } from "../../generated/prisma";
 
 export const auth = betterAuth({
+    secret: envVars.BETTER_AUTH_SECRET,
     database: prismaAdapter(prisma, {
         provider: "postgresql",
     }),
-    baseURL: `${envVars.BACKEND_URL}/api/v1/auth`,
+
+    baseURL: `${envVars.BACKEND_URL}/api/auth`,
 
     emailAndPassword: {
         enabled: true,
@@ -18,7 +21,27 @@ export const auth = betterAuth({
         google: {
             clientId: envVars.GOOGLE_CLIENT_ID as string,
             clientSecret: envVars.GOOGLE_CLIENT_SECRET as string,
-        },
+
+            mapProfileToUser: (profile) => {
+                return {
+                    name: profile.name,
+                    email: profile.email,
+                    image: profile.picture,
+                    role: Role.USER,
+                    status: UserStatus.ACTIVE,
+                    needPasswordChange: false,
+                    emailVerified: true,
+                    isDeleted: false,
+                    deletedAt: null,
+                }
+            }
+        }
+    },
+
+    emailVerification: {
+        sendOnSignUp: true,
+        sendOnSignIn: true,
+        autoSignInAfterVerification: true,
     },
 
     user: {
@@ -47,6 +70,10 @@ export const auth = betterAuth({
         }
     },
 
+    redirectURLs: {
+        signIn: `${envVars.BACKEND_URL}/api/v1/auth/google/success`,
+    },
+
     session: {
         expiresIn: 60 * 60 * 24 * 7,
         updateAge: 60 * 60 * 24,
@@ -73,4 +100,26 @@ export const auth = betterAuth({
         }
     },
 
+    advanced: {
+        debug: true,
+        useSecureCookies: false,
+        cookies: {
+            state: {
+                attributes: {
+                    sameSite: "lax",
+                    secure: false,
+                    httpOnly: true,
+                    path: "/",
+                }
+            },
+            sessionToken: {
+                attributes: {
+                    sameSite: "lax",
+                    secure: false,
+                    httpOnly: true,
+                    path: "/",
+                }
+            }
+        }
+    }
 });

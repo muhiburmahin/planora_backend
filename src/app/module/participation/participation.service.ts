@@ -4,10 +4,11 @@ import { prisma } from "../../lib/prisma";
 import AppError from "../../errorHelpers/appError";
 import status from "http-status";
 import { IParticipationFilterRequest, IParticipationOptions } from "./participation.interface";
+import { NotificationService } from "../notification/notification.service";
 
 // 1. Join Event with Advanced Validation
 const joinEvent = async (userId: string, eventId: string): Promise<Participation> => {
-    return await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
         const user = await tx.user.findUnique({ where: { id: userId } });
         if (!user || user.status !== UserStatus.ACTIVE) {
             throw new AppError(status.FORBIDDEN, "User account is not active or found");
@@ -43,7 +44,7 @@ const joinEvent = async (userId: string, eventId: string): Promise<Participation
         const ticketNumber = `TKT-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
         const isFree = event.registrationFee === 0;
 
-        return await tx.participation.create({
+        const participation = await tx.participation.create({
             data: {
                 userId,
                 eventId,
@@ -53,7 +54,20 @@ const joinEvent = async (userId: string, eventId: string): Promise<Participation
             },
             include: { event: true }
         });
+
+        return participation;
     }, { timeout: 15000 });
+
+    if (result) {
+        await NotificationService.createNotification(
+            userId,
+            `You have successfully joined the event: ${result.event.title}`,
+            "REGISTRATION_CONFIRMED",
+            `/events/${result.eventId}`
+        );
+    }
+
+    return result;
 };
 
 // 2. Advanced Filtering & Searching
@@ -89,7 +103,6 @@ const getAllParticipations = async (filters: IParticipationFilterRequest, option
         orderBy: { [sortBy as string]: sortOrder },
         include: {
             user: { select: { name: true, email: true, image: true } },
-            // FIX: 'location' এর বদলে 'venue' ব্যবহার করা হয়েছে আপনার স্কিমা অনুযায়ী
             event: { select: { title: true, date: true, venue: true, registrationFee: true } }
         }
     });
@@ -126,7 +139,7 @@ const updateStatus = async (id: string, payload: Partial<Participation>) => {
         }
     }
 
-    return await prisma.participation.update({
+    const result = await prisma.participation.update({
         where: { id },
         data: {
             status: updatedStatus,
@@ -136,6 +149,17 @@ const updateStatus = async (id: string, payload: Partial<Participation>) => {
         },
         include: { event: true, user: true }
     });
+
+    if (result && updatedStatus) {
+        await NotificationService.createNotification(
+            result.userId,
+            `Your registration for ${result.event.title} is now ${updatedStatus}.`,
+            "SYSTEM_ALERT",
+            `/participations/${result.id}`
+        );
+    }
+
+    return result;
 };
 
 // 6. Safe Cancel Registration

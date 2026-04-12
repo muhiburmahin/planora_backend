@@ -319,6 +319,7 @@ const getMe = async (userId: string) => {
 };
 
 const googleLoginSuccess = async (session: any) => {
+
     const isProfileExists = await prisma.profile.findUnique({
         where: { userId: session.user.id }
     });
@@ -328,20 +329,25 @@ const googleLoginSuccess = async (session: any) => {
             data: {
                 userId: session.user.id,
                 bio: "Welcome to Planora!",
+                contactNumber: "",
+                address: ""
             }
         });
     }
 
-    const jwtPayload: IJWTPayload = {
+    const accessToken = tokenUtils.getAccessToken({
         id: session.user.id,
-        email: session.user.email,
-        role: (session.user.role || "USER") as any,
-    };
+        role: session.user.role,
+        email: session.user.email
+    });
 
-    return {
-        accessToken: tokenUtils.getAccessToken(jwtPayload),
-        refreshToken: tokenUtils.getRefreshToken(jwtPayload),
-    };
+    const refreshToken = tokenUtils.getRefreshToken({
+        id: session.user.id,
+        role: session.user.role,
+        email: session.user.email
+    });
+
+    return { accessToken, refreshToken };
 };
 
 export const AuthService = {
