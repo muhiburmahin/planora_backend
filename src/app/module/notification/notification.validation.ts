@@ -16,8 +16,10 @@ const markAsRead = z.object({
     params: z.object({
         id: z.string().uuid({ message: "Invalid Notification ID format" }),
     }),
+    body: z.object({
+        isRead: z.boolean().optional()
+    })
 });
-
 export const NotificationValidations = {
     getNotificationsQuery,
     markAsRead,

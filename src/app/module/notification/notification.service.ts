@@ -1,9 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Notification, NotificationType, Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../lib/prisma";
 import { socketHelper } from "../../utils/socket";
 import { INotificationFilterRequest, INotificationOptions } from "./notification.interface";
 import AppError from "../../errorHelpers/appError";
 import httpStatus from "http-status";
+import { sendEmail } from "../../utils/sendEmail";
 
 const createNotification = async (
     userId: string,
@@ -11,35 +13,88 @@ const createNotification = async (
     type: NotificationType,
     link: string = "#"
 ): Promise<Notification> => {
-    const notification = await prisma.notification.create({
-        data: { userId, message, type, link },
-        include: {
-            user: {
-                select: { email: true, name: true }
+    try {
+        console.log(`\x1b[36m[Notification-Attempt]\x1b[0m User: ${userId} | Type: ${type}`);
+
+        const notification = await prisma.notification.create({
+            data: { userId, message, type, link },
+            include: {
+                user: {
+                    select: { email: true, name: true }
+                }
             }
+        });
+
+        console.log(`\x1b[32m[Notification-Success]\x1b[0m Created with ID: ${notification.id}`);
+
+        if (userId && notification) {
+            socketHelper.emitNotification(userId, notification);
         }
-    });
 
-    // সকেট নোটিফিকেশন কাজ করবে
-    socketHelper.emitNotification(userId, notification);
+        if (notification.user?.email) {
+            const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+            const fullLink = `${frontendUrl}${link}`;
 
-    // Redis কিউ সাময়িকভাবে বন্ধ রাখা হলো
-    /*
-    await notificationQueue.add('sendEmail', {
-        email: notification.user.email,
-        subject: `Planora: ${type.split('_').join(' ')}`,
-        message: `Hi ${notification.user.name || 'User'}, <br/> ${message} <br/> <a href="${link}">View Details</a>`
-    }, {
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 5000 },
-        removeOnComplete: true
-    });
-    */
+            const emailHtml = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <style>
+                    .container { max-width: 600px; margin: 0 auto; font-family: 'Segoe UI', Arial, sans-serif; border: 1px solid #e0e0e0; border-radius: 12px; overflow: hidden; background-color: #ffffff; }
+                    .header { background: linear-gradient(135deg, #4f46e5, #6366f1); padding: 30px; text-align: center; color: white; }
+                    .content { padding: 40px; line-height: 1.6; color: #333; }
+                    .alert-box { background-color: #f9fafb; border-left: 4px solid #4f46e5; padding: 20px; margin: 25px 0; border-radius: 4px; }
+                    .btn { display: inline-block; background-color: #4f46e5; color: #ffffff !important; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 20px 0; box-shadow: 0 4px 6px rgba(79, 70, 229, 0.2); }
+                    .footer { background-color: #f3f4f6; padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1 style="margin:0; font-size: 28px; letter-spacing: 1px;">Planora</h1>
+                    </div>
+                    <div class="content">
+                        <h2 style="color: #111827; margin-top: 0;">New Activity Update</h2>
+                        <p>Hi <strong>${notification.user.name || 'User'}</strong>,</p>
+                        <p>You have a new notification regarding your account activity on Planora.</p>
+                        
+                        <div class="alert-box">
+                            <p style="margin: 0; font-size: 16px; color: #4b5563;">"${message}"</p>
+                        </div>
 
-    return notification;
+                        <div style="text-align: center;">
+                            <a href="${fullLink}" class="btn">View Details in App</a>
+                        </div>
+                        
+                        <p style="font-size: 14px; color: #9ca3af; margin-top: 30px;">
+                            If the button doesn't work, copy and paste this link: <br>
+                            <span style="color: #4f46e5;">${fullLink}</span>
+                        </p>
+                    </div>
+                    <div class="footer">
+                        <p>&copy; ${new Date().getFullYear()} Planora Team. All rights reserved.</p>
+                        <p>You are receiving this because you signed up for Planora.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            `;
+
+            sendEmail(
+                notification.user.email,
+                `Planora Update: ${message.substring(0, 40)}...`,
+                emailHtml
+            ).catch(err => console.error("Notification Email Error:", err));
+        }
+
+        return notification;
+
+    } catch (error: any) {
+        console.error(`\x1b[31m[Notification-Error]\x1b[0m Failed:`, error.message);
+        throw error;
+    }
 };
-
-// ... বাকি ফাংশনগুলো আগের মতোই থাকবে (সেগুলোতে কোনো পরিবর্তন নেই)
 const getMyNotifications = async (
     userId: string,
     filters: INotificationFilterRequest,
@@ -91,16 +146,25 @@ const getUnreadCount = async (userId: string) => {
     const count = await prisma.notification.count({
         where: { userId, isRead: false }
     });
-    return { unreadCount: count };
+
+    return {
+        count,
+        timestamp: new Date()
+    };
 };
 
+
 const markAsRead = async (userId: string, id: string): Promise<Notification> => {
-    const isExist = await prisma.notification.findFirst({
-        where: { id, userId }
+    const notification = await prisma.notification.findUnique({
+        where: { id }
     });
 
-    if (!isExist) {
+    if (!notification) {
         throw new AppError(httpStatus.NOT_FOUND, "Notification not found");
+    }
+
+    if (notification.userId !== userId) {
+        throw new AppError(httpStatus.FORBIDDEN, "You are not authorized to access this notification");
     }
 
     return await prisma.notification.update({
@@ -109,40 +173,68 @@ const markAsRead = async (userId: string, id: string): Promise<Notification> => 
     });
 };
 
-const markAllAsRead = async (userId: string): Promise<Prisma.BatchPayload> => {
-    return await prisma.notification.updateMany({
+
+const markAllAsRead = async (userId: string) => {
+    const result = await prisma.notification.updateMany({
         where: { userId, isRead: false },
         data: { isRead: true }
     });
+
+    return {
+        message: "All notifications marked as read",
+        count: result.count
+    };
 };
 
-const deleteNotification = async (userId: string, id: string): Promise<Notification> => {
-    const isExist = await prisma.notification.findFirst({
+
+const deleteNotification = async (userId: string, id: string) => {
+    const notification = await prisma.notification.findFirst({
         where: { id, userId }
     });
 
-    if (!isExist) {
-        throw new AppError(httpStatus.NOT_FOUND, "Notification not found");
+    if (!notification) {
+        throw new AppError(httpStatus.NOT_FOUND, "Notification not found or access denied");
     }
 
-    return await prisma.notification.delete({
+    const deletedData = await prisma.notification.delete({
         where: { id }
     });
+
+    return {
+        id: deletedData.id,
+        deletedAt: new Date(),
+        status: "DELETED"
+    };
 };
 
-const clearAllNotifications = async (userId: string): Promise<Prisma.BatchPayload> => {
-    return await prisma.notification.deleteMany({
+
+const clearAllNotifications = async (userId: string) => {
+    const result = await prisma.notification.deleteMany({
         where: { userId }
     });
+
+    return {
+        message: "Notification history cleared successfully",
+        deletedCount: result.count
+    };
 };
 
-const deleteOldNotifications = async (): Promise<Prisma.BatchPayload> => {
+
+const deleteOldNotifications = async () => {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    return await prisma.notification.deleteMany({
-        where: { createdAt: { lt: thirtyDaysAgo } }
+    const result = await prisma.notification.deleteMany({
+        where: {
+            createdAt: { lt: thirtyDaysAgo },
+            isRead: true
+        }
     });
+
+    return {
+        clearedAt: new Date(),
+        removedCount: result.count
+    };
 };
 
 export const NotificationService = {

@@ -1,50 +1,48 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Participation, Prisma, RequestStatus, PaymentStatus, UserStatus } from "../../../generated/prisma/client";
+import { Participation, Prisma, RequestStatus, PaymentStatus, UserStatus, NotificationType } from "../../../generated/prisma/client";
 import { prisma } from "../../lib/prisma";
 import AppError from "../../errorHelpers/appError";
 import status from "http-status";
 import { IParticipationFilterRequest, IParticipationOptions } from "./participation.interface";
 import { NotificationService } from "../notification/notification.service";
+const joinEvent = async (userId: string, eventId: string): Promise<any> => {
+    // ১. ভ্যালিডেশনগুলো ট্রানজাকশনের বাইরে নিয়ে আসুন (এতে ট্রানজাকশন টাইম কমবে)
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.status !== UserStatus.ACTIVE) {
+        throw new AppError(status.FORBIDDEN, "User account is not active or found");
+    }
 
-// 1. Join Event with Advanced Validation
-const joinEvent = async (userId: string, eventId: string): Promise<Participation> => {
+    const event = await prisma.event.findFirst({
+        where: { id: eventId, isPublished: true, status: "UPCOMING" },
+        include: { _count: { select: { participations: true } } }
+    });
+
+    if (!event) throw new AppError(status.NOT_FOUND, "Event not found or not available");
+
+    // ডেডলাইন চেক
+    const currentTime = new Date();
+    const eventDate = (event as any).date || (event as any).startDate;
+    if (eventDate) {
+        const deadline = new Date(new Date(eventDate).getTime() - 60 * 60 * 1000);
+        if (currentTime > deadline) {
+            throw new AppError(status.BAD_REQUEST, "Registration closed! Deadline was 1 hour before start.");
+        }
+    }
+
+    // ক্যাপাসিটি চেক
+    if (event.maxParticipants && event._count.participations >= event.maxParticipants) {
+        throw new AppError(status.BAD_REQUEST, "Event capacity reached!");
+    }
+
+    // ২. শুধুমাত্র ডেটা রাইট করার জন্য ট্রানজাকশন ব্যবহার করুন
     const result = await prisma.$transaction(async (tx) => {
-        const user = await tx.user.findUnique({ where: { id: userId } });
-        if (!user || user.status !== UserStatus.ACTIVE) {
-            throw new AppError(status.FORBIDDEN, "User account is not active or found");
-        }
-
-        const event = await tx.event.findFirst({
-            where: {
-                id: eventId,
-                isPublished: true,
-                status: "UPCOMING"
-            },
-            include: { _count: { select: { participations: true } } }
-        });
-
-        if (!event) throw new AppError(status.NOT_FOUND, "Event not found or not available for registration");
-
-        const currentTime = new Date();
-        const eventDate = (event as any).date || (event as any).startDate;
-        if (eventDate) {
-            const deadline = new Date(new Date(eventDate).getTime() - 60 * 60 * 1000);
-            if (currentTime > deadline) {
-                throw new AppError(status.BAD_REQUEST, "Registration closed! Deadline was 1 hour before start.");
-            }
-        }
-
-        if (event.maxParticipants && event._count.participations >= event.maxParticipants) {
-            throw new AppError(status.BAD_REQUEST, "Event capacity reached! Better luck next time.");
-        }
-
         const alreadyJoined = await tx.participation.findFirst({ where: { userId, eventId } });
-        if (alreadyJoined) throw new AppError(status.CONFLICT, "You are already registered for this event");
+        if (alreadyJoined) throw new AppError(status.CONFLICT, "You are already registered");
 
         const ticketNumber = `TKT-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
         const isFree = event.registrationFee === 0;
 
-        const participation = await tx.participation.create({
+        return await tx.participation.create({
             data: {
                 userId,
                 eventId,
@@ -52,19 +50,24 @@ const joinEvent = async (userId: string, eventId: string): Promise<Participation
                 status: isFree ? RequestStatus.APPROVED : RequestStatus.PENDING,
                 paymentStatus: isFree ? PaymentStatus.PAID : PaymentStatus.PENDING,
             },
-            include: { event: true }
+            include: { event: { select: { title: true, id: true } } }
         });
-
-        return participation;
-    }, { timeout: 15000 });
+    }, {
+        timeout: 20000 // টাইমআউট ২০ সেকেন্ড করা হলো সেফটির জন্য
+    });
 
     if (result) {
-        await NotificationService.createNotification(
-            userId,
-            `You have successfully joined the event: ${result.event.title}`,
-            "REGISTRATION_CONFIRMED",
-            `/events/${result.eventId}`
-        );
+        try {
+            await NotificationService.createNotification(
+                userId,
+                `You have successfully joined: ${result.event.title}`,
+                NotificationType.REGISTRATION_CONFIRMED,
+                `/events/${result.eventId}`
+            );
+            console.log(`\x1b[32m[Registration-Notification]\x1b[0m Sent to User: ${userId}`);
+        } catch (error) {
+            console.error(`\x1b[31m[Notification-Failed]\x1b[0m`, error);
+        }
     }
 
     return result;

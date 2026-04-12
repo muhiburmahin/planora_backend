@@ -1,26 +1,25 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import httpStatus from "http-status";
-import { Prisma, Role, EventStatus } from "../../../generated/prisma/client";
+import { Prisma, Role, EventStatus, NotificationType } from "../../../generated/prisma/client";
 import { prisma } from "../../lib/prisma";
 import { IEvent, IEventFilterRequest } from "./event.interface";
 import AppError from "../../errorHelpers/appError";
+import { NotificationService } from "../notification/notification.service";
 
-// Helper for SEO friendly slugs
 const generateSlug = (title: string) => {
     return title
         .toLowerCase()
         .replace(/ /g, '-')
         .replace(/[^\w-]+/g, '') + '-' + Date.now();
 };
-
 // 1. Create Event with Business Logic
 const createEvent = async (payload: IEvent, imageUrls: string[]) => {
-    // Logic: Prevent creating events in the past
+    // ইভেন্ট ডেট চেক
     if (new Date(payload.date) < new Date()) {
         throw new AppError(httpStatus.BAD_REQUEST, "Event date cannot be in the past");
     }
 
-    // Logic: Unique title check for the same organizer
+    // ইউনিক টাইটেল চেক
     const isEventExist = await prisma.event.findFirst({
         where: {
             title: payload.title,
@@ -34,7 +33,8 @@ const createEvent = async (payload: IEvent, imageUrls: string[]) => {
 
     const slug = generateSlug(payload.title);
 
-    return await prisma.$transaction(async (tx) => {
+    // --- ট্রানজাকশন শুরু (শুধুমাত্র ডাটাবেস অপারেশন) ---
+    const newEvent = await prisma.$transaction(async (tx) => {
         return await tx.event.create({
             data: {
                 ...payload,
@@ -42,14 +42,32 @@ const createEvent = async (payload: IEvent, imageUrls: string[]) => {
                 images: {
                     create: imageUrls.length > 0
                         ? imageUrls.map((url) => ({ url }))
-                        : [] // Fallback handled in frontend or schema default
+                        : []
                 },
             },
             include: { images: true, category: true },
         });
     });
-};
 
+    // --- ট্রানজাকশনের বাইরে নোটিফিকেশন পাঠানো (এটি ফিক্স) ---
+    if (newEvent) {
+        try {
+            // এটি ট্রানজাকশনের বাইরে থাকায় এখন আর টাইমআউট এরর হবে না
+            await NotificationService.createNotification(
+                newEvent.organizerId,
+                `আপনার ইভেন্ট "${newEvent.title}" সফলভাবে তৈরি হয়েছে!`,
+                NotificationType.SYSTEM_ALERT,
+                `/events/${newEvent.slug}`
+            );
+            console.log(`\x1b[32m[Event-Notification-Sent]\x1b[0m Notification sent to organizer.`);
+        } catch (error) {
+            // নোটিফিকেশন ফেইল করলেও ইভেন্ট ক্রিয়েট হয়ে গেছে, তাই ইউজারকে এরর দেখানোর দরকার নেই
+            console.error(`\x1b[31m[Event-Notification-Error]\x1b[0m`, error);
+        }
+    }
+
+    return newEvent;
+};
 // 2. Advanced Filtering and Searching
 const getAllEvents = async (filters: IEventFilterRequest, options: any) => {
     const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = options;

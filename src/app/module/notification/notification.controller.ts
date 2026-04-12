@@ -47,6 +47,7 @@ const markAsRead = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+
 const markAllAsRead = catchAsync(async (req: Request, res: Response) => {
     const user = (req as any).user;
     const result = await NotificationService.markAllAsRead(user.id);
@@ -59,18 +60,20 @@ const markAllAsRead = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+
 const deleteNotification = catchAsync(async (req: Request, res: Response) => {
     const user = (req as any).user;
     const { id } = req.params;
-    await NotificationService.deleteNotification(user.id, id as string);
+    const result = await NotificationService.deleteNotification(user.id, id as string);
 
     sendResponse(res, {
         statusCode: httpStatus.OK,
         success: true,
         message: "Notification deleted successfully",
-        data: null
+        data: result
     });
 });
+
 
 const clearAllNotifications = catchAsync(async (req: Request, res: Response) => {
     const user = (req as any).user;
@@ -84,13 +87,14 @@ const clearAllNotifications = catchAsync(async (req: Request, res: Response) => 
     });
 });
 
+
 const deleteOldNotifications = catchAsync(async (req: Request, res: Response) => {
     const result = await NotificationService.deleteOldNotifications();
 
     sendResponse(res, {
         statusCode: httpStatus.OK,
         success: true,
-        message: `System: Deleted ${result.count} old notifications`,
+        message: "System cleanup completed successfully",
         data: result
     });
 });
