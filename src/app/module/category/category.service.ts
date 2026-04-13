@@ -1,61 +1,107 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { prisma } from "../../lib/prisma.js";
-import { ICategoryFilterRequest, ICategoryOptions } from "./category.interface.js";
+import slugify from 'slugify';
+import { prisma } from '../../lib/prisma';
+import AppError from '../../errorHelpers/appError';
+import httpStatus from 'http-status';
 
+const createCategory = async (payload: any) => {
+    const isExist = await prisma.category.findFirst({
+        where: { name: { equals: payload.name, mode: 'insensitive' }, isDeleted: false }
+    });
+    if (isExist) throw new AppError(httpStatus.CONFLICT, "Category already exists!");
 
-const createCategory = async (data: { name: string; description?: string }) => {
-    return await prisma.category.create({ data });
+    let slug = slugify(payload.name, { lower: true, strict: true });
+    const isSlugExist = await prisma.category.findUnique({ where: { slug } });
+
+    if (isSlugExist) {
+        slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+    payload.slug = slug;
+
+    return await prisma.category.create({ data: payload });
 };
 
-const getAllCategories = async (filters: ICategoryFilterRequest, options: ICategoryOptions) => {
-    const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = options;
-    const skip = (Number(page) - 1) * Number(limit);
+const getAllCategories = async (filters: any, options: any) => {
+    const { searchTerm, isActive } = filters;
+    const { limit, page } = options;
+    const skip = (page - 1) * limit;
 
-    const { searchTerm } = filters;
-    const andConditions = [];
+    const where: any = { isDeleted: false };
 
     if (searchTerm) {
-        andConditions.push({
-            name: { contains: searchTerm, mode: 'insensitive' as const },
-        });
+        where.OR = [
+            { name: { contains: searchTerm, mode: 'insensitive' } },
+            { description: { contains: searchTerm, mode: 'insensitive' } },
+            { slug: { contains: searchTerm, mode: 'insensitive' } },
+        ];
     }
 
-    const whereConditions: any = {
-        isDeleted: false,
-        ...(andConditions.length > 0 ? { AND: andConditions } : {})
-    };
+    if (isActive !== undefined) where.isActive = isActive;
 
-    const result = await prisma.category.findMany({
-        where: whereConditions,
-        skip,
-        take: Number(limit),
-        orderBy: { [sortBy]: sortOrder },
-    });
-
-    const total = await prisma.category.count({ where: whereConditions });
+    const [data, total] = await Promise.all([
+        prisma.category.findMany({
+            where,
+            skip,
+            take: limit,
+            orderBy: { name: 'asc' },
+            include: {
+                _count: { select: { events: true } }
+            }
+        }),
+        prisma.category.count({ where }),
+    ]);
 
     return {
-        meta: { page: Number(page), limit: Number(limit), total },
-        data: result,
+        meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+        data,
     };
 };
 
-const updateCategory = async (id: string, data: any) => {
-    const isExist = await prisma.category.findFirst({
-        where: { id, isDeleted: false }
+const getSingleCategory = async (slug: string) => {
+    const result = await prisma.category.findUnique({
+        where: { slug, isDeleted: false },
+        include: {
+            _count: { select: { events: true } }
+        }
     });
+    if (!result) throw new AppError(httpStatus.NOT_FOUND, "Category not found!");
+    return result;
+};
 
-    if (!isExist) {
-        throw new Error("Category not found or already deleted!");
+const updateCategory = async (id: string, payload: any) => {
+    const isExist = await prisma.category.findUnique({ where: { id } });
+    if (!isExist) throw new AppError(httpStatus.NOT_FOUND, "Category not found!");
+
+    if (payload.name) {
+        payload.slug = slugify(payload.name, { lower: true, strict: true });
     }
 
     return await prisma.category.update({
         where: { id },
-        data,
+        data: payload,
     });
 };
+
+const toggleCategoryStatus = async (id: string) => {
+    const isExist = await prisma.category.findUnique({ where: { id } });
+    if (!isExist) throw new AppError(httpStatus.NOT_FOUND, "Category not found!");
+
+    return await prisma.category.update({
+        where: { id },
+        data: { isActive: !isExist.isActive }
+    });
+};
+
 const deleteCategory = async (id: string) => {
-    await prisma.category.findFirstOrThrow({ where: { id, isDeleted: false } });
+    // ক্যাটাগরিতে ইভেন্ট থাকলে ডিলিট করতে বাধা দেওয়া (Industry Standard)
+    const eventCount = await prisma.event.count({
+        where: { categoryId: id, isDeleted: false }
+    });
+
+    if (eventCount > 0) {
+        throw new AppError(httpStatus.BAD_REQUEST, "Cannot delete category while it has active events!");
+    }
+
     return await prisma.category.update({
         where: { id },
         data: { isDeleted: true },
@@ -65,6 +111,8 @@ const deleteCategory = async (id: string) => {
 export const CategoryService = {
     createCategory,
     getAllCategories,
+    getSingleCategory,
     updateCategory,
+    toggleCategoryStatus,
     deleteCategory,
 };

@@ -7,17 +7,12 @@ import { EventService } from "./event.service";
 import pick from "../../shared/pick";
 
 const createEvent = catchAsync(async (req: Request, res: Response) => {
-    const slug = req.body.title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)+/g, '') + '-' + Date.now();
-
-    const imageUrls = (req.files as any[])?.map((file) => file.path) || [];
+    const files = req.files as Express.Multer.File[];
+    const imageUrls = files?.map((file) => file.path) || [];
 
     const result = await EventService.createEvent(
         {
             ...req.body,
-            slug,
             organizerId: req.user.id,
             date: new Date(req.body.date),
             registrationFee: Number(req.body.registrationFee) || 0

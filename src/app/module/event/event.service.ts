@@ -21,8 +21,9 @@ const createEvent = async (payload: IEvent, imageUrls: string[]) => {
 
     const isEventExist = await prisma.event.findFirst({
         where: {
-            title: payload.title,
-            organizerId: payload.organizerId
+            title: { equals: payload.title, mode: 'insensitive' },
+            organizerId: payload.organizerId,
+            isDeleted: false
         }
     });
 
@@ -33,14 +34,14 @@ const createEvent = async (payload: IEvent, imageUrls: string[]) => {
     const slug = generateSlug(payload.title);
 
     const newEvent = await prisma.$transaction(async (tx) => {
+        const { ...eventData } = payload;
+
         return await tx.event.create({
             data: {
-                ...payload,
+                ...eventData,
                 slug,
                 images: {
-                    create: imageUrls.length > 0
-                        ? imageUrls.map((url) => ({ url }))
-                        : []
+                    create: imageUrls.map((url) => ({ url }))
                 },
             },
             include: { images: true, category: true },
@@ -48,17 +49,12 @@ const createEvent = async (payload: IEvent, imageUrls: string[]) => {
     });
 
     if (newEvent) {
-        try {
-            await NotificationService.createNotification(
-                newEvent.organizerId,
-                `Your event "${newEvent.title}" has been created successfully!`,
-                NotificationType.SYSTEM_ALERT,
-                `/events/${newEvent.slug}`
-            );
-            console.log(`\x1b[32m[Event-Notification-Sent]\x1b[0m Notification sent to organizer.`);
-        } catch (error) {
-            console.error(`\x1b[31m[Event-Notification-Error]\x1b[0m`, error);
-        }
+        NotificationService.createNotification(
+            newEvent.organizerId,
+            `Your event "${newEvent.title}" has been created successfully!`,
+            NotificationType.SYSTEM_ALERT,
+            `/events/${newEvent.slug}`
+        ).catch(err => console.error("Notification Error:", err));
     }
 
     return newEvent;
@@ -169,11 +165,14 @@ const updateEvent = async (id: string, user: { id: string, role: Role }, payload
     });
 };
 
-// 5. Protected Delete Event
+// 5. Protected Delete Even
 const deleteEvent = async (id: string, user: { id: string, role: Role }) => {
     const event = await prisma.event.findUniqueOrThrow({
         where: { id },
-        include: { _count: { select: { participations: true } } }
+        include: {
+            images: true,
+            _count: { select: { participations: true } }
+        }
     });
 
     if (user.role !== Role.ADMIN && event.organizerId !== user.id) {
@@ -184,7 +183,10 @@ const deleteEvent = async (id: string, user: { id: string, role: Role }) => {
         throw new AppError(httpStatus.BAD_REQUEST, "Cannot delete event with active participants. Please cancel instead.");
     }
 
-    return await prisma.event.delete({ where: { id } });
+    return await prisma.event.delete({
+        where: { id }
+    });
 };
 
 export const EventService = { createEvent, getAllEvents, getSingleEvent, updateEvent, deleteEvent };
+

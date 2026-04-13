@@ -3,7 +3,8 @@ import auth from "../../middleware/auth";
 import validateRequest from "../../middleware/validateRequest";
 import { EventController } from "./event.controller";
 import { EventValidations } from "./event.validation";
-import { upload } from "../../shared/upload.utils";
+import { upload } from "../../middleware/multer";
+
 
 const router = Router();
 
