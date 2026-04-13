@@ -7,22 +7,66 @@ import { InvitationValidations } from './invitation.validation';
 
 const router = express.Router();
 
-// 1 & 2: Lists
-router.get('/inbox', auth(Role.USER, Role.ADMIN), InvitationController.getMyInvitations);
-router.get('/sent', auth(Role.USER, Role.ADMIN), InvitationController.getSentInvitations);
+/**
+ * Lists: Inbox and Sent items
+ */
+router.get(
+    '/inbox',
+    auth(Role.USER, Role.ADMIN),
+    InvitationController.getMyInvitations
+);
 
-// 3: Admin only
-router.get('/', auth(Role.ADMIN), InvitationController.getAllInvitations);
+router.get(
+    '/sent',
+    auth(Role.USER, Role.ADMIN),
+    InvitationController.getSentInvitations
+);
 
-// 4: Cleanup
-router.delete('/cleanup', auth(Role.ADMIN), InvitationController.cleanupInvitations);
+/**
+ * Administrative: Management and Cleanup
+ */
+router.get(
+    '/',
+    auth(Role.ADMIN),
+    InvitationController.getAllInvitations
+);
 
-// 5: Single View
-router.get('/:id', auth(Role.USER, Role.ADMIN), InvitationController.getSingleInvitation);
+router.delete(
+    '/cleanup',
+    auth(Role.ADMIN),
+    InvitationController.cleanupInvitations
+);
 
-// 6: Actions
-router.post('/send', auth(Role.USER, Role.ADMIN), validateRequest(InvitationValidations.sendInvitation), InvitationController.sendInvitation);
-router.patch('/:id/respond', auth(Role.USER, Role.ADMIN), validateRequest(InvitationValidations.respondToInvitation), InvitationController.respondToInvitation);
-router.delete('/:id/withdraw', auth(Role.USER, Role.ADMIN), InvitationController.withdrawInvitation);
+/**
+ * Core Actions: Send, Respond, and Withdraw
+ */
+router.post(
+    '/send',
+    auth(Role.USER, Role.ADMIN),
+    validateRequest(InvitationValidations.sendInvitation),
+    InvitationController.sendInvitation
+);
+
+router.patch(
+    '/:id/respond',
+    auth(Role.USER, Role.ADMIN),
+    validateRequest(InvitationValidations.respondToInvitation),
+    InvitationController.respondToInvitation
+);
+
+router.delete(
+    '/:id/withdraw',
+    auth(Role.USER, Role.ADMIN),
+    InvitationController.withdrawInvitation
+);
+
+/**
+ * Single View: Keep this at the bottom to avoid routing conflicts
+ */
+router.get(
+    '/:id',
+    auth(Role.USER, Role.ADMIN),
+    InvitationController.getSingleInvitation
+);
 
 export const InvitationRoutes = router;

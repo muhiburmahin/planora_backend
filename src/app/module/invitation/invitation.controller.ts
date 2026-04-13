@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Request, Response } from "express";
 import httpStatus from "http-status";
 import catchAsync from "../../shared/catchAsync";
@@ -5,49 +6,122 @@ import pick from "../../shared/pick";
 import sendResponse from "../../shared/sendResponse";
 import { InvitationService } from "./invitation.service";
 
+// ১. নতুন ইনভিটেশন পাঠানো
 const sendInvitation = catchAsync(async (req: Request, res: Response) => {
-    const result = await InvitationService.sendInvitation((req as any).user.id, req.body);
-    sendResponse(res, { statusCode: httpStatus.CREATED, success: true, message: "Invitation sent successfully", data: result });
+    const { id: userId } = (req as any).user;
+    const result = await InvitationService.sendInvitation(userId, req.body);
+
+    sendResponse(res, {
+        statusCode: httpStatus.CREATED,
+        success: true,
+        message: "Invitation sent successfully",
+        data: result
+    });
 });
 
+// ২. ইনভিটেশন একসেপ্ট বা রিজেক্ট করা
 const respondToInvitation = catchAsync(async (req: Request, res: Response) => {
-    const result = await InvitationService.respondToInvitation((req as any).user.id, req.params.id, req.body.status);
-    sendResponse(res, { statusCode: httpStatus.OK, success: true, message: "Response submitted", data: result });
+    const { id: userId } = (req as any).user;
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const result = await InvitationService.respondToInvitation(userId, id as string, status);
+
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: `Invitation ${status.toLowerCase()} successfully`,
+        data: result
+    });
 });
 
+// ৩. নিজের পাওয়া সব ইনভিটেশন (Inbox)
 const getMyInvitations = catchAsync(async (req: Request, res: Response) => {
-    const result = await InvitationService.getMyInvitations((req as any).user.id);
-    sendResponse(res, { statusCode: httpStatus.OK, success: true, message: "Inbox fetched", data: result });
+    const { id: userId } = (req as any).user;
+    const result = await InvitationService.getMyInvitations(userId);
+
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: "Inbox invitations retrieved successfully",
+        data: result
+    });
 });
 
+// ৪. নিজের পাঠানো সব ইনভিটেশন (Outbox)
 const getSentInvitations = catchAsync(async (req: Request, res: Response) => {
-    const result = await InvitationService.getSentInvitations((req as any).user.id);
-    sendResponse(res, { statusCode: httpStatus.OK, success: true, message: "Sent items fetched", data: result });
+    const { id: userId } = (req as any).user;
+    const result = await InvitationService.getSentInvitations(userId);
+
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: "Sent invitations retrieved successfully",
+        data: result
+    });
 });
 
+// ৫. নির্দিষ্ট একটি ইনভিটেশনের ডিটেইলস
 const getSingleInvitation = catchAsync(async (req: Request, res: Response) => {
-    const result = await InvitationService.getSingleInvitation((req as any).user.id, req.params.id);
-    sendResponse(res, { statusCode: httpStatus.OK, success: true, message: "Invitation details fetched", data: result });
+    const { id: userId } = (req as any).user;
+    const result = await InvitationService.getSingleInvitation(userId, req.params.id as string);
+
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: "Invitation details retrieved successfully",
+        data: result
+    });
 });
 
+// ৬. এডমিনের জন্য সব ইনভিটেশন (Filtering & Pagination সহ)
 const getAllInvitations = catchAsync(async (req: Request, res: Response) => {
-    const filters = pick(req.query, ['searchTerm', 'status', 'eventId']);
+    const filters = pick(req.query, ['searchTerm', 'status', 'eventId', 'senderId', 'receiverId']);
     const options = pick(req.query, ['limit', 'page', 'sortBy', 'sortOrder']);
+
     const result = await InvitationService.getAllInvitations(filters, options);
-    sendResponse(res, { statusCode: httpStatus.OK, success: true, message: "All invitations fetched", meta: result.meta, data: result.data });
+
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: "All invitations retrieved successfully",
+        meta: result.meta,
+        data: result.data
+    });
 });
 
+// ৭. পাঠানো ইনভিটেশন উইথড্র করা
 const withdrawInvitation = catchAsync(async (req: Request, res: Response) => {
-    await InvitationService.withdrawInvitation((req as any).user.id, req.params.id);
-    sendResponse(res, { statusCode: httpStatus.OK, success: true, message: "Withdrawn successfully", data: null });
+    const { id: userId } = (req as any).user;
+    await InvitationService.withdrawInvitation(userId, req.params.id as string);
+
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: "Invitation withdrawn successfully",
+        data: null
+    });
 });
 
+// ৮. সিস্টেম ক্লিনআপ (পুরাতন ডাটা মোছা)
 const cleanupInvitations = catchAsync(async (req: Request, res: Response) => {
     const result = await InvitationService.cleanupInvitations();
-    sendResponse(res, { statusCode: httpStatus.OK, success: true, message: "System cleanup successful", data: result });
+
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: "System cleanup performed successfully",
+        data: result
+    });
 });
 
 export const InvitationController = {
-    sendInvitation, respondToInvitation, getMyInvitations, getSentInvitations,
-    getSingleInvitation, getAllInvitations, withdrawInvitation, cleanupInvitations
+    sendInvitation,
+    respondToInvitation,
+    getMyInvitations,
+    getSentInvitations,
+    getSingleInvitation,
+    getAllInvitations,
+    withdrawInvitation,
+    cleanupInvitations
 };
