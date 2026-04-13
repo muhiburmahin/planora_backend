@@ -22,9 +22,9 @@ export const envVars = {
     BACKEND_URL: process.env.BACKEND_URL || 'http://localhost:5000',
 
     // Cloudinary
-    CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
-    CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY,
-    CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
+    // CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
+    // CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY,
+    // CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
 
     // Email Config
     EMAIL_USER: process.env.EMAIL_USER,

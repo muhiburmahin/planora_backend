@@ -51,7 +51,7 @@ const createEvent = async (payload: IEvent, imageUrls: string[]) => {
         try {
             await NotificationService.createNotification(
                 newEvent.organizerId,
-                `Your event "${newEvent.title}" has been created successfully!`, // ইংরেজি মেসেজ
+                `Your event "${newEvent.title}" has been created successfully!`,
                 NotificationType.SYSTEM_ALERT,
                 `/events/${newEvent.slug}`
             );
