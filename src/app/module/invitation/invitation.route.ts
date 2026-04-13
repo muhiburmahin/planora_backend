@@ -7,9 +7,7 @@ import { InvitationValidations } from './invitation.validation';
 
 const router = express.Router();
 
-/**
- * Lists: Inbox and Sent items
- */
+
 router.get(
     '/inbox',
     auth(Role.USER, Role.ADMIN),
@@ -22,9 +20,7 @@ router.get(
     InvitationController.getSentInvitations
 );
 
-/**
- * Administrative: Management and Cleanup
- */
+
 router.get(
     '/',
     auth(Role.ADMIN),
@@ -37,9 +33,7 @@ router.delete(
     InvitationController.cleanupInvitations
 );
 
-/**
- * Core Actions: Send, Respond, and Withdraw
- */
+
 router.post(
     '/send',
     auth(Role.USER, Role.ADMIN),
@@ -60,9 +54,7 @@ router.delete(
     InvitationController.withdrawInvitation
 );
 
-/**
- * Single View: Keep this at the bottom to avoid routing conflicts
- */
+
 router.get(
     '/:id',
     auth(Role.USER, Role.ADMIN),

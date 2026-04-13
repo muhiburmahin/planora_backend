@@ -35,7 +35,7 @@ router.get(
 
 router.patch(
     "/:id/status",
-    auth(Role.ADMIN),
+    auth(Role.ADMIN, Role.USER),
     validateRequest(ParticipationValidations.updateStatus),
     ParticipationController.updateStatus
 );

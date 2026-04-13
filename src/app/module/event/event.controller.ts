@@ -7,7 +7,6 @@ import { EventService } from "./event.service";
 import pick from "../../shared/pick";
 
 const createEvent = catchAsync(async (req: Request, res: Response) => {
-    // ইন্ডাস্ট্রি স্ট্যান্ডার্ড স্লাগ জেনারেশন
     const slug = req.body.title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')

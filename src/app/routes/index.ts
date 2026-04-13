@@ -5,6 +5,7 @@ import { AuthRoutes } from "../module/auth/auth.route";
 import { ParticipationRoutes } from "../module/participation/participation.route";
 import { NotificationRoutes } from "../module/notification/notification.route";
 import { InvitationRoutes } from "../module/invitation/invitation.route";
+import { ReviewRoutes } from "../module/review/review.route";
 
 const router = Router();
 
@@ -32,6 +33,10 @@ const moduleRoutes = [
     {
         path: "/invitations",
         route: InvitationRoutes
+    },
+    {
+        path: "/reviews",
+        route: ReviewRoutes
     }
 
 

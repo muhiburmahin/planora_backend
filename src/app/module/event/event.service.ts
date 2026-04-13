@@ -14,12 +14,11 @@ const generateSlug = (title: string) => {
 };
 // 1. Create Event with Business Logic
 const createEvent = async (payload: IEvent, imageUrls: string[]) => {
-    // ইভেন্ট ডেট চেক
+
     if (new Date(payload.date) < new Date()) {
         throw new AppError(httpStatus.BAD_REQUEST, "Event date cannot be in the past");
     }
 
-    // ইউনিক টাইটেল চেক
     const isEventExist = await prisma.event.findFirst({
         where: {
             title: payload.title,
@@ -33,7 +32,6 @@ const createEvent = async (payload: IEvent, imageUrls: string[]) => {
 
     const slug = generateSlug(payload.title);
 
-    // --- ট্রানজাকশন শুরু (শুধুমাত্র ডাটাবেস অপারেশন) ---
     const newEvent = await prisma.$transaction(async (tx) => {
         return await tx.event.create({
             data: {
@@ -49,19 +47,16 @@ const createEvent = async (payload: IEvent, imageUrls: string[]) => {
         });
     });
 
-    // --- ট্রানজাকশনের বাইরে নোটিফিকেশন পাঠানো (এটি ফিক্স) ---
     if (newEvent) {
         try {
-            // এটি ট্রানজাকশনের বাইরে থাকায় এখন আর টাইমআউট এরর হবে না
             await NotificationService.createNotification(
                 newEvent.organizerId,
-                `আপনার ইভেন্ট "${newEvent.title}" সফলভাবে তৈরি হয়েছে!`,
+                `Your event "${newEvent.title}" has been created successfully!`, // ইংরেজি মেসেজ
                 NotificationType.SYSTEM_ALERT,
                 `/events/${newEvent.slug}`
             );
             console.log(`\x1b[32m[Event-Notification-Sent]\x1b[0m Notification sent to organizer.`);
         } catch (error) {
-            // নোটিফিকেশন ফেইল করলেও ইভেন্ট ক্রিয়েট হয়ে গেছে, তাই ইউজারকে এরর দেখানোর দরকার নেই
             console.error(`\x1b[31m[Event-Notification-Error]\x1b[0m`, error);
         }
     }
@@ -121,7 +116,7 @@ const getAllEvents = async (filters: IEventFilterRequest, options: any) => {
             images: true,
             category: true,
             organizer: { select: { name: true, image: true } },
-            _count: { select: { participations: true } } // For "Popularity" badges on UI
+            _count: { select: { participations: true } }
         },
         orderBy: { [sortBy]: sortOrder },
     });
@@ -132,7 +127,6 @@ const getAllEvents = async (filters: IEventFilterRequest, options: any) => {
     return { meta: { page: Number(page), limit: Number(limit), total, totalPage }, data: result };
 };
 
-// 3. Get Single Event (Supports ID or Slug for SEO)
 const getSingleEvent = async (identifier: string) => {
     return await prisma.event.findFirstOrThrow({
         where: {

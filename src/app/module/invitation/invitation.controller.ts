@@ -6,7 +6,6 @@ import pick from "../../shared/pick";
 import sendResponse from "../../shared/sendResponse";
 import { InvitationService } from "./invitation.service";
 
-// ১. নতুন ইনভিটেশন পাঠানো
 const sendInvitation = catchAsync(async (req: Request, res: Response) => {
     const { id: userId } = (req as any).user;
     const result = await InvitationService.sendInvitation(userId, req.body);
@@ -19,7 +18,6 @@ const sendInvitation = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
-// ২. ইনভিটেশন একসেপ্ট বা রিজেক্ট করা
 const respondToInvitation = catchAsync(async (req: Request, res: Response) => {
     const { id: userId } = (req as any).user;
     const { id } = req.params;
@@ -35,7 +33,6 @@ const respondToInvitation = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
-// ৩. নিজের পাওয়া সব ইনভিটেশন (Inbox)
 const getMyInvitations = catchAsync(async (req: Request, res: Response) => {
     const { id: userId } = (req as any).user;
     const result = await InvitationService.getMyInvitations(userId);
@@ -48,7 +45,6 @@ const getMyInvitations = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
-// ৪. নিজের পাঠানো সব ইনভিটেশন (Outbox)
 const getSentInvitations = catchAsync(async (req: Request, res: Response) => {
     const { id: userId } = (req as any).user;
     const result = await InvitationService.getSentInvitations(userId);
@@ -61,7 +57,6 @@ const getSentInvitations = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
-// ৫. নির্দিষ্ট একটি ইনভিটেশনের ডিটেইলস
 const getSingleInvitation = catchAsync(async (req: Request, res: Response) => {
     const { id: userId } = (req as any).user;
     const result = await InvitationService.getSingleInvitation(userId, req.params.id as string);
@@ -74,7 +69,6 @@ const getSingleInvitation = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
-// ৬. এডমিনের জন্য সব ইনভিটেশন (Filtering & Pagination সহ)
 const getAllInvitations = catchAsync(async (req: Request, res: Response) => {
     const filters = pick(req.query, ['searchTerm', 'status', 'eventId', 'senderId', 'receiverId']);
     const options = pick(req.query, ['limit', 'page', 'sortBy', 'sortOrder']);
@@ -90,7 +84,6 @@ const getAllInvitations = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
-// ৭. পাঠানো ইনভিটেশন উইথড্র করা
 const withdrawInvitation = catchAsync(async (req: Request, res: Response) => {
     const { id: userId } = (req as any).user;
     await InvitationService.withdrawInvitation(userId, req.params.id as string);
@@ -103,7 +96,6 @@ const withdrawInvitation = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
-// ৮. সিস্টেম ক্লিনআপ (পুরাতন ডাটা মোছা)
 const cleanupInvitations = catchAsync(async (req: Request, res: Response) => {
     const result = await InvitationService.cleanupInvitations();
 

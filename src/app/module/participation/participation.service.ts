@@ -5,8 +5,8 @@ import AppError from "../../errorHelpers/appError";
 import status from "http-status";
 import { IParticipationFilterRequest, IParticipationOptions } from "./participation.interface";
 import { NotificationService } from "../notification/notification.service";
+
 const joinEvent = async (userId: string, eventId: string): Promise<any> => {
-    // ১. ভ্যালিডেশনগুলো ট্রানজাকশনের বাইরে নিয়ে আসুন (এতে ট্রানজাকশন টাইম কমবে)
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user || user.status !== UserStatus.ACTIVE) {
         throw new AppError(status.FORBIDDEN, "User account is not active or found");
@@ -19,7 +19,6 @@ const joinEvent = async (userId: string, eventId: string): Promise<any> => {
 
     if (!event) throw new AppError(status.NOT_FOUND, "Event not found or not available");
 
-    // ডেডলাইন চেক
     const currentTime = new Date();
     const eventDate = (event as any).date || (event as any).startDate;
     if (eventDate) {
@@ -29,12 +28,10 @@ const joinEvent = async (userId: string, eventId: string): Promise<any> => {
         }
     }
 
-    // ক্যাপাসিটি চেক
     if (event.maxParticipants && event._count.participations >= event.maxParticipants) {
         throw new AppError(status.BAD_REQUEST, "Event capacity reached!");
     }
 
-    // ২. শুধুমাত্র ডেটা রাইট করার জন্য ট্রানজাকশন ব্যবহার করুন
     const result = await prisma.$transaction(async (tx) => {
         const alreadyJoined = await tx.participation.findFirst({ where: { userId, eventId } });
         if (alreadyJoined) throw new AppError(status.CONFLICT, "You are already registered");
@@ -53,7 +50,7 @@ const joinEvent = async (userId: string, eventId: string): Promise<any> => {
             include: { event: { select: { title: true, id: true } } }
         });
     }, {
-        timeout: 20000 // টাইমআউট ২০ সেকেন্ড করা হলো সেফটির জন্য
+        timeout: 20000
     });
 
     if (result) {

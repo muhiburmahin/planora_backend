@@ -116,9 +116,6 @@ const respondToInvitation = async (userId: string, id: string, status: RequestSt
     });
 };
 
-/**
- * Filtered fetch for management/admin views
- */
 const getAllInvitations = async (filters: IInvitationFilterRequest, options: IInvitationOptions) => {
     const { limit, page, skip } = paginationHelper.calculatePagination(options);
     const { searchTerm, ...filterData } = filters;
@@ -159,9 +156,7 @@ const getAllInvitations = async (filters: IInvitationFilterRequest, options: IIn
     return { meta: { total, page, limit }, data };
 };
 
-/**
- * Standard utility fetches
- */
+
 const getMyInvitations = async (userId: string) => {
     return await prisma.invitation.findMany({
         where: { receiverId: userId },

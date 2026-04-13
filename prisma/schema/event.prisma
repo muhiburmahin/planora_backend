@@ -22,6 +22,8 @@ model Event {
   organizer        User        @relation("OrganizerEvents", fields: [organizerId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   
   participations   Participation[]
+  averageRating    Float    @default(0)
+  totalReviews     Int      @default(0)
   reviews          Review[]
   invitations      Invitation[]
   
