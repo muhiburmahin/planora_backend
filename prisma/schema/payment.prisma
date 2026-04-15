@@ -1,0 +1,22 @@
+model Payment {
+  id              String        @id @default(uuid())
+  amount          Float
+  transactionId   String        @unique
+  paymentStatus   PaymentStatus @default(PENDING)
+  paymentDetails  Json?
+  cardType        String?
+  paidAt          DateTime?
+  valId         String?   
+  bankTranId    String?   
+  storeAmount   Float?    
+  verifySign    String?   
+  ipnResponse   Json?
+  
+  participationId String
+  participation   Participation @relation(fields: [participationId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("payments")
+}

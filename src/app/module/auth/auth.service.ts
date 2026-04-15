@@ -34,7 +34,10 @@ const registerUser = async (payload: IRegisterUserPayload) => {
         const finalData = await prisma.$transaction(async (tx) => {
             const updatedUser = await tx.user.update({
                 where: { id: authData.user.id },
-                data: { verificationToken: verificationToken }
+                data: {
+                    verificationToken: verificationToken,
+                    role: payload.role || "USER"
+                }
             });
 
             const profile = await tx.profile.upsert({
@@ -95,7 +98,7 @@ const registerUser = async (payload: IRegisterUserPayload) => {
         const jwtPayload: IJWTPayload = {
             id: authData.user.id,
             email: authData.user.email,
-            role: (authData.user.role as any) || "USER",
+            role: (finalData.updatedUser.role as any) || "USER",
         };
 
         return {

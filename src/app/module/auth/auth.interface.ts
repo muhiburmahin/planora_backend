@@ -5,6 +5,7 @@ export interface IRegisterUserPayload {
     name: string;
     email: string;
     password: string;
+    role?: "USER" | "ADMIN";
 }
 
 export interface ILoginUserPayload {

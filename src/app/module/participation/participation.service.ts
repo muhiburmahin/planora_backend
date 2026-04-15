@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Participation, Prisma, RequestStatus, PaymentStatus, UserStatus, NotificationType } from "../../../generated/prisma/client";
 import { prisma } from "../../lib/prisma";
 import AppError from "../../errorHelpers/appError";
 import status from "http-status";
 import { IParticipationFilterRequest, IParticipationOptions } from "./participation.interface";
 import { NotificationService } from "../notification/notification.service";
+import { NotificationType, Prisma, RequestStatus, UserStatus } from "../../../generated/prisma/client";
 
 const joinEvent = async (userId: string, eventId: string): Promise<any> => {
     const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -39,13 +39,13 @@ const joinEvent = async (userId: string, eventId: string): Promise<any> => {
         const ticketNumber = `TKT-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
         const isFree = event.registrationFee === 0;
 
+        // Note: paymentStatus এখন আর Participation মডেলে নেই, তাই এখান থেকে সরানো হয়েছে
         return await tx.participation.create({
             data: {
                 userId,
                 eventId,
                 ticketNumber,
                 status: isFree ? RequestStatus.APPROVED : RequestStatus.PENDING,
-                paymentStatus: isFree ? PaymentStatus.PAID : PaymentStatus.PENDING,
             },
             include: { event: { select: { title: true, id: true } } }
         });
@@ -53,7 +53,7 @@ const joinEvent = async (userId: string, eventId: string): Promise<any> => {
         timeout: 20000
     });
 
-    if (result) {
+    if (result && result.event) { // result.event চেক যোগ করা হয়েছে
         try {
             await NotificationService.createNotification(
                 userId,
@@ -61,7 +61,6 @@ const joinEvent = async (userId: string, eventId: string): Promise<any> => {
                 NotificationType.REGISTRATION_CONFIRMED,
                 `/events/${result.eventId}`
             );
-            console.log(`\x1b[32m[Registration-Notification]\x1b[0m Sent to User: ${userId}`);
         } catch (error) {
             console.error(`\x1b[31m[Notification-Failed]\x1b[0m`, error);
         }
@@ -70,7 +69,6 @@ const joinEvent = async (userId: string, eventId: string): Promise<any> => {
     return result;
 };
 
-// 2. Advanced Filtering & Searching
 const getAllParticipations = async (filters: IParticipationFilterRequest, options: IParticipationOptions) => {
     const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = options;
     const skip = (Number(page) - 1) * Number(limit);
@@ -103,7 +101,8 @@ const getAllParticipations = async (filters: IParticipationFilterRequest, option
         orderBy: { [sortBy as string]: sortOrder },
         include: {
             user: { select: { name: true, email: true, image: true } },
-            event: { select: { title: true, date: true, venue: true, registrationFee: true } }
+            event: { select: { title: true, date: true, venue: true, registrationFee: true } },
+            payments: true // Payment মড্যুল রিলেশন ইনক্লুড করা হয়েছে
         }
     });
 
@@ -111,30 +110,29 @@ const getAllParticipations = async (filters: IParticipationFilterRequest, option
     return { meta: { page: Number(page), limit: Number(limit), total }, data: result };
 };
 
-// 3. Get My Participations
 const getMyParticipations = async (userId: string, options: IParticipationOptions) => {
     return await getAllParticipations({ userId }, options);
 };
 
-// 4. Get Single Participation Details
 const getSingleParticipation = async (id: string) => {
     return await prisma.participation.findUniqueOrThrow({
         where: { id },
-        include: { user: true, event: true }
+        include: { user: true, event: true, payments: true }
     });
 };
 
-// 5. Update Status with Business Rules
-const updateStatus = async (id: string, payload: Partial<Participation>) => {
-    const { status: updatedStatus, paymentStatus, transactionId, paymentDetails } = payload;
+const updateStatus = async (id: string, payload: any) => { // Partial<Participation> এর বদলে any কারণ পেমেন্ট ডাটা এখানে আসতে পারে
+    const { status: updatedStatus } = payload;
 
     const currentRecord = await prisma.participation.findUniqueOrThrow({
         where: { id },
-        include: { event: true }
+        include: { event: true, payments: true }
     });
 
+    // পেমেন্ট চেক করার লজিক আপডেট
     if (updatedStatus === RequestStatus.APPROVED && currentRecord.event.registrationFee > 0) {
-        if (paymentStatus !== PaymentStatus.PAID && currentRecord.paymentStatus !== PaymentStatus.PAID) {
+        const isPaid = currentRecord.payments.some(p => p.paymentStatus === 'PAID');
+        if (!isPaid) {
             throw new AppError(status.BAD_REQUEST, "Cannot approve registration without confirmed payment.");
         }
     }
@@ -143,9 +141,6 @@ const updateStatus = async (id: string, payload: Partial<Participation>) => {
         where: { id },
         data: {
             status: updatedStatus,
-            paymentStatus,
-            transactionId,
-            paymentDetails: paymentDetails as Prisma.InputJsonValue
         },
         include: { event: true, user: true }
     });
@@ -154,7 +149,7 @@ const updateStatus = async (id: string, payload: Partial<Participation>) => {
         await NotificationService.createNotification(
             result.userId,
             `Your registration for ${result.event.title} is now ${updatedStatus}.`,
-            "SYSTEM_ALERT",
+            NotificationType.SYSTEM_ALERT,
             `/participations/${result.id}`
         );
     }
@@ -162,19 +157,19 @@ const updateStatus = async (id: string, payload: Partial<Participation>) => {
     return result;
 };
 
-// 6. Safe Cancel Registration
 const cancelParticipation = async (userId: string, id: string) => {
     const participation = await prisma.participation.findUniqueOrThrow({
         where: { id },
-        include: { event: true }
+        include: { event: true, payments: true }
     });
 
     if (participation.userId !== userId) {
         throw new AppError(status.FORBIDDEN, "Unauthorized access");
     }
 
-    if (participation.paymentStatus === PaymentStatus.PAID) {
-        throw new AppError(status.BAD_REQUEST, "Paid registrations cannot be deleted. Contact support.");
+    const isPaid = participation.payments.some(p => p.paymentStatus === 'PAID');
+    if (isPaid) {
+        throw new AppError(status.BAD_REQUEST, "Paid registrations cannot be deleted.");
     }
 
     const eventDate = (participation.event as any).date || (participation.event as any).startDate;

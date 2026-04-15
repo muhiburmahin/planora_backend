@@ -40,14 +40,25 @@ const getAdminDashboardStats = async (): Promise<IAdminDashboardStats> => {
         prisma.user.count({ where: { isDeleted: false } }),
         prisma.user.count({ where: { createdAt: { gte: thirtyDaysAgo }, isDeleted: false } }),
         prisma.event.count(),
+        // এখানে লজিক পরিবর্তন করা হয়েছে: Participation -> Payments (PAID)
         prisma.participation.findMany({
-            where: { paymentStatus: 'PAID' },
-            select: { event: { select: { registrationFee: true } } }
+            where: {
+                payments: {
+                    some: {
+                        paymentStatus: 'PAID'
+                    }
+                }
+            },
+            select: {
+                event: {
+                    select: { registrationFee: true }
+                }
+            }
         })
     ]);
 
     const totalRevenue = paidParticipations.reduce((acc, curr) => acc + (curr.event?.registrationFee || 0), 0);
-    const userGrowthRate = ((recentUsers / totalUsers) * 100).toFixed(2);
+    const userGrowthRate = totalUsers > 0 ? ((recentUsers / totalUsers) * 100).toFixed(2) : "0.00";
 
     const categoryDistribution = await prisma.category.findMany({
         select: { name: true, _count: { select: { events: true } } }
@@ -118,7 +129,6 @@ const getAllUsers = async () => {
 };
 
 const changeUserStatus = async (id: string, status: UserStatus) => {
-
     const isUserExist = await prisma.user.findUnique({
         where: { id, isDeleted: false }
     });

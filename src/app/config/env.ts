@@ -37,6 +37,12 @@ export const envVars = {
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
     GOOGLE_CALLBACK_URL: process.env.GOOGLE_CALLBACK_URL,
+
+
+    SSL_STORE_ID: process.env.SSL_STORE_ID,
+    SSL_STORE_PASS: process.env.SSL_STORE_PASS,
+    SSL_IS_SANDBOX: process.env.SSL_IS_SANDBOX === 'true'
+
 };
 
 // Safety Check
