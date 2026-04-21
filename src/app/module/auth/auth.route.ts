@@ -41,11 +41,8 @@ router.post(
     AuthController.changePassword
 );
 
-router.post(
-    '/logout',
-    authMiddleware('ADMIN', 'USER'),
-    AuthController.logoutUser
-);
+// Logout should be callable even if the client does not have a valid access token
+router.post('/logout', AuthController.logoutUser);
 
 
 router.get("/login/google",

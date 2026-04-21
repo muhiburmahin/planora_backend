@@ -87,9 +87,18 @@ const forgetPassword = catchAsync(async (req: Request, res: Response) => {
 });
 
 const resetPassword = catchAsync(async (req: Request, res: Response) => {
-    const token = req.params.token as string; // Type casted to string
+    const { otp, newPassword } = req.body as { otp?: string; newPassword?: string };
 
-    const result = await AuthService.resetPassword(token, req.body);
+    if (!otp || !newPassword) {
+        return sendResponse(res, {
+            statusCode: httpStatus.BAD_REQUEST,
+            success: false,
+            message: 'Invalid request: otp and newPassword are required',
+            data: null,
+        });
+    }
+
+    const result = await AuthService.resetPassword(otp, { newPassword });
 
     sendResponse(res, {
         statusCode: httpStatus.OK,
@@ -136,7 +145,9 @@ const getNewToken = catchAsync(async (req: Request, res: Response) => {
         statusCode: httpStatus.OK,
         success: true,
         message: "New access token generated successfully!",
-        data: null,
+        data: {
+            accessToken: result.accessToken
+        },
     });
 });
 
