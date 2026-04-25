@@ -89,6 +89,26 @@ const createReview = async (userId: string, payload: IReviewPayload) => {
     });
 };
 
+const getSingleReview = async (id: string) => {
+    const result = await prisma.review.findUnique({
+        where: { id },
+        include: {
+            user: { 
+                select: { name: true, image: true, email: true } 
+            },
+            event: { 
+                select: { title: true, id: true } 
+            }
+        }
+    });
+
+    if (!result) {
+        throw new AppError(httpStatus.NOT_FOUND, "Review not found!");
+    }
+
+    return result;
+};
+
 const getEventReviews = async (eventId: string, options: any) => {
     const { page = 1, limit = 10 } = options;
     const skip = (Number(page) - 1) * Number(limit);
@@ -210,6 +230,7 @@ export const ReviewService = {
     getEventReviews,
     getReviewStats,
     getMyReviews,
+    getSingleReview,
     updateReview,
     deleteReview,
     deleteReviewByAdmin

@@ -38,11 +38,11 @@ export const envVars = {
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
     GOOGLE_CALLBACK_URL: process.env.GOOGLE_CALLBACK_URL,
 
+    // Stripe Config
+    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
+    STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
 
-    SSL_STORE_ID: process.env.SSL_STORE_ID,
-    SSL_STORE_PASS: process.env.SSL_STORE_PASS,
-    SSL_IS_SANDBOX: process.env.SSL_IS_SANDBOX === 'true'
-
+   
 };
 
 // Safety Check

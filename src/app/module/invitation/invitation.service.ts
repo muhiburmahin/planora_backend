@@ -7,7 +7,6 @@ import { NotificationService } from "../notification/notification.service";
 import { IInvitationFilterRequest, IInvitationOptions, IInvitationPayload } from "./invitation.interface";
 import { paginationHelper } from "../../helper/paginationHelper";
 
-
 const sendInvitation = async (senderId: string, payload: IInvitationPayload) => {
     const { eventId, receiverId, message } = payload;
 
@@ -77,11 +76,11 @@ const sendInvitation = async (senderId: string, payload: IInvitationPayload) => 
     return invitationResult;
 };
 
-
 const respondToInvitation = async (userId: string, id: string, status: RequestStatus) => {
+   
     const invitation = await prisma.invitation.findUnique({
         where: { id },
-        include: { event: { select: { status: true, title: true } } }
+        include: { event: { select: { status: true, title: true, registrationFee: true } } }
     });
 
     if (!invitation || invitation.receiverId !== userId) {
@@ -100,8 +99,15 @@ const respondToInvitation = async (userId: string, id: string, status: RequestSt
         const updated = await tx.invitation.update({ where: { id }, data: { status } });
 
         if (status === RequestStatus.APPROVED) {
+           
+            const isPaidEvent = invitation.event.registrationFee > 0;
+
             await tx.participation.create({
-                data: { eventId: invitation.eventId, userId: invitation.receiverId, status: RequestStatus.APPROVED }
+                data: { 
+                    eventId: invitation.eventId, 
+                    userId: invitation.receiverId, 
+                    status: isPaidEvent ? RequestStatus.PENDING : RequestStatus.APPROVED 
+                }
             });
         }
 
@@ -155,7 +161,6 @@ const getAllInvitations = async (filters: IInvitationFilterRequest, options: IIn
 
     return { meta: { total, page, limit }, data };
 };
-
 
 const getMyInvitations = async (userId: string) => {
     return await prisma.invitation.findMany({

@@ -46,4 +46,9 @@ router.delete(
     ParticipationController.cancelParticipation
 );
 
+router.get(
+    "/event/:eventId", 
+    auth(Role.ADMIN, Role.USER),
+    ParticipationController.getEventParticipants
+);
 export const ParticipationRoutes = router;

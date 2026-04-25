@@ -14,6 +14,7 @@ model User {
   verificationToken    String?   
   lastLogin            DateTime?
   
+  unreadCount Int    @default(0)
 
   needPasswordChange Boolean     @default(false)
   isDeleted          Boolean     @default(false)

@@ -19,6 +19,18 @@ const createReview = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const getSingleReview = catchAsync(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const result = await ReviewService.getSingleReview(id as string);
+
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: "Review retrieved successfully",
+        data: result
+    });
+});
+
 // 2. Get all reviews for a specific event
 const getEventReviews = catchAsync(async (req, res) => {
     const { eventId } = req.params;
@@ -110,6 +122,7 @@ const deleteReviewByAdmin = catchAsync(async (req: Request, res: Response) => {
 export const ReviewController = {
     createReview,
     getEventReviews,
+    getSingleReview,
     getReviewStats,
     getMyReviews,
     updateReview,

@@ -1,5 +1,14 @@
-export const PaymentUtils = {
-    simulateDelay: () => new Promise((resolve) => setTimeout(resolve, 2000)),
+import { prisma } from "../lib/prisma";
+import { PaymentStatus } from "../../generated/prisma/client";
 
-    generateTransactionId: (pId: string) => `PLANORA-TXN-${Date.now()}-${pId.slice(0, 4)}`
+export const PaymentUtils = {
+  createInitialPaymentRecord: async (participationId: string, amount: number) => {
+    return await prisma.payment.create({
+      data: {
+        participationId,
+        amount,
+        paymentStatus: PaymentStatus.PENDING
+      }
+    });
+  }
 };

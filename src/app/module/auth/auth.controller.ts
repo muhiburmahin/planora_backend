@@ -60,17 +60,30 @@ const loginUser = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+
 const verifyEmail = catchAsync(async (req: Request, res: Response) => {
-    const token = req.params.token as string; // Type casted to string
+    try {
+        const token = req.params.token as string;
+        
+        const result = await AuthService.verifyEmail(token);
 
-    const result = await AuthService.verifyEmail(token);
+        res.cookie('accessToken', result.accessToken, { 
+            ...cookieOptions, 
+            maxAge: 1000 * 60 * 60 * 24 
+        });
+        
+        res.cookie('refreshToken', result.refreshToken, { 
+            ...cookieOptions, 
+            maxAge: 1000 * 60 * 60 * 24 * 30 
+        });
 
-    sendResponse(res, {
-        statusCode: httpStatus.OK,
-        success: true,
-        message: result.message,
-        data: null,
-    });
+        res.redirect(`${process.env.FRONTEND_URL}/?verified=true`);
+
+    } catch (error) {
+        console.error("Email Verification Error:", error);
+        
+        res.redirect(`${process.env.FRONTEND_URL}/login?error=invalid_token`);
+    }
 });
 
 const forgetPassword = catchAsync(async (req: Request, res: Response) => {

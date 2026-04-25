@@ -7,8 +7,11 @@ import cookieParser from 'cookie-parser';
 import { toNodeHandler } from 'better-auth/node';
 import { auth } from './app/lib/auth';
 import path from 'path';
+import { initNotificationCron } from './cron/notification.cron';
 
 const app: Application = express();
+
+initNotificationCron();
 
 app.set("view engine", "ejs");
 app.set("views", path.resolve(process.cwd(), `src/app/templates`));

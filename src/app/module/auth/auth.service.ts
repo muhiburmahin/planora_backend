@@ -56,38 +56,39 @@ const registerUser = async (payload: IRegisterUserPayload) => {
 
         const verifyURL = `${envVars.BACKEND_URL}/api/v1/auth/verify-email/${verificationToken}`;
 
-        const htmlTemplate = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <style>
-                .container { max-width: 600px; margin: 0 auto; font-family: sans-serif; border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden; }
-                .header { background-color: #4CAF50; padding: 20px; text-align: center; color: white; }
-                .content { padding: 30px; line-height: 1.6; color: #333; }
-                .btn { display: inline-block; background-color: #4CAF50; color: white !important; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; }
-                .footer { background-color: #f9f9f9; padding: 15px; text-align: center; font-size: 12px; color: #777; }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header"><h1>Planora</h1></div>
-                <div class="content">
-                    <h2>Verify Your Email</h2>
-                    <p>Hi <strong>${payload.name}</strong>,</p>
-                    <p>Welcome to Planora! To complete your registration and secure your account, please verify your email address.</p>
-                    <div style="text-align: center;">
-                        <a href="${verifyURL}" class="btn">Verify Email Address</a>
-                    </div>
-                    <p>If the button doesn't work, copy and paste this link: <br> <span style="color: #4CAF50;">${verifyURL}</span></p>
-                </div>
-                <div class="footer">
-                    <p>&copy; ${new Date().getFullYear()} Planora Team. All rights reserved.</p>
-                </div>
+  
+const htmlTemplate = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        .container { max-width: 600px; margin: 0 auto; font-family: sans-serif; border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden; }
+        .header { background-color: #9333ea; padding: 20px; text-align: center; color: white; }
+        .content { padding: 30px; line-height: 1.6; color: #333; }
+        .btn { display: inline-block; background-color: #f97316; color: white !important; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; }
+        .footer { background-color: #f9f9f9; padding: 15px; text-align: center; font-size: 12px; color: #777; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header"><h1>Planora</h1></div>
+        <div class="content">
+            <h2>Verify Your Email</h2>
+            <p>Hi <strong>${payload.name}</strong>,</p>
+            <p>Welcome to Planora! To complete your registration and secure your account, please verify your email address.</p>
+            <div style="text-align: center;">
+                <a href="${verifyURL}" class="btn">Verify Email Address</a>
             </div>
-        </body>
-        </html>
-        `;
+            <p>If the button doesn't work, copy and paste this link: <br> <span style="color: #9333ea;">${verifyURL}</span></p>
+        </div>
+        <div class="footer">
+            <p>&copy; ${new Date().getFullYear()} Planora Team. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
+`;
 
         await sendEmail(
             payload.email,
@@ -160,11 +161,9 @@ const verifyEmail = async (token: string) => {
         where: { verificationToken: token }
     });
 
-    if (!user) {
-        throw new AppError(status.BAD_REQUEST, "Invalid or expired verification token!");
-    }
+    if (!user) throw new AppError(status.BAD_REQUEST, "Invalid or expired verification token!");
 
-    await prisma.user.update({
+    const updatedUser = await prisma.user.update({
         where: { id: user.id },
         data: {
             emailVerified: true,
@@ -172,7 +171,17 @@ const verifyEmail = async (token: string) => {
         }
     });
 
-    return { message: "Email verified successfully! You can now login." };
+    const jwtPayload: IJWTPayload = {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        role: updatedUser.role as any,
+    };
+
+    return { 
+        message: "Email verified successfully!",
+        accessToken: tokenUtils.getAccessToken(jwtPayload),
+        refreshToken: tokenUtils.getRefreshToken(jwtPayload)
+    };
 };
 
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();

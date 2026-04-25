@@ -29,10 +29,22 @@ const createEvent = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getAllEvents = catchAsync(async (req: Request, res: Response) => {
-    const filters = pick(req.query, ['searchTerm', 'categoryId', 'type', 'status', 'minPrice', 'maxPrice', 'isOnline']);
+    
+    const filters = pick(req.query, [
+        'searchTerm', 
+        'categoryId', 
+        'type', 
+        'status', 
+        'minPrice', 
+        'maxPrice', 
+        'isOnline', 
+        'cost' 
+    ]);
+    
     const options = pick(req.query, ['page', 'limit', 'sortBy', 'sortOrder']);
 
     const result = await EventService.getAllEvents(filters, options);
+
     sendResponse(res, {
         statusCode: httpStatus.OK,
         success: true,

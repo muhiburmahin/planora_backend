@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { RequestStatus, UserStatus } from '../../../generated/prisma/client';
+import { RequestStatus, UserStatus, PaymentStatus } from '../../../generated/prisma/client';
 import AppError from '../../errorHelpers/appError';
 import { prisma } from '../../lib/prisma';
 import { IAdminDashboardStats, IUserDashboardStats, IUserUpdatePayload } from './user.interface';
@@ -32,32 +32,25 @@ const updateMyProfile = async (userId: string, payload: IUserUpdatePayload) => {
     });
 };
 
-const getAdminDashboardStats = async (): Promise<IAdminDashboardStats> => {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+// Admin Dashboard: Performance optimized with aggregation
+const getAdminDashboardStats = async (startDate?: string, endDate?: string): Promise<IAdminDashboardStats> => {
+    const dateFilter = startDate && endDate ? { 
+        createdAt: { gte: new Date(startDate), lte: new Date(endDate) } 
+    } : {};
 
-    const [totalUsers, recentUsers, totalEvents, paidParticipations] = await Promise.all([
+   
+    const [totalUsers, recentUsers, totalEvents, totalParticipations, revenueData] = await Promise.all([
         prisma.user.count({ where: { isDeleted: false } }),
-        prisma.user.count({ where: { createdAt: { gte: thirtyDaysAgo }, isDeleted: false } }),
+        prisma.user.count({ where: { createdAt: dateFilter.createdAt, isDeleted: false } }),
         prisma.event.count(),
-        // এখানে লজিক পরিবর্তন করা হয়েছে: Participation -> Payments (PAID)
-        prisma.participation.findMany({
-            where: {
-                payments: {
-                    some: {
-                        paymentStatus: 'PAID'
-                    }
-                }
-            },
-            select: {
-                event: {
-                    select: { registrationFee: true }
-                }
-            }
+        prisma.participation.count({ where: { createdAt: dateFilter.createdAt } }),
+      
+        prisma.payment.aggregate({
+            where: { paymentStatus: PaymentStatus.PAID, createdAt: dateFilter.createdAt },
+            _sum: { amount: true }
         })
     ]);
 
-    const totalRevenue = paidParticipations.reduce((acc, curr) => acc + (curr.event?.registrationFee || 0), 0);
     const userGrowthRate = totalUsers > 0 ? ((recentUsers / totalUsers) * 100).toFixed(2) : "0.00";
 
     const categoryDistribution = await prisma.category.findMany({
@@ -68,9 +61,9 @@ const getAdminDashboardStats = async (): Promise<IAdminDashboardStats> => {
         summary: {
             totalUsers,
             totalEvents,
-            totalRevenue,
+            totalRevenue: revenueData._sum.amount || 0,
             userGrowthRate: `${userGrowthRate}%`,
-            totalParticipations: paidParticipations.length
+            totalParticipations
         },
         categoryDistribution,
         recentActivities: await prisma.participation.findMany({
@@ -111,20 +104,9 @@ const getUserDashboardStats = async (userId: string): Promise<IUserDashboardStat
 
 const getAllUsers = async () => {
     return await prisma.user.findMany({
-        where: {
-            isDeleted: false,
-        },
-        include: {
-            profile: {
-                select: {
-                    contactNumber: true,
-                    address: true
-                }
-            }
-        },
-        orderBy: {
-            createdAt: 'desc',
-        },
+        where: { isDeleted: false },
+        include: { profile: { select: { contactNumber: true, address: true } } },
+        orderBy: { createdAt: 'desc' },
     });
 };
 
@@ -133,24 +115,32 @@ const changeUserStatus = async (id: string, status: UserStatus) => {
         where: { id, isDeleted: false }
     });
 
-    if (!isUserExist) {
-        throw new AppError(httpStatus.NOT_FOUND, "User not found!");
-    }
+    if (!isUserExist) throw new AppError(httpStatus.NOT_FOUND, "User not found!");
 
+   
     return await prisma.user.update({
         where: { id },
-        data: { status }
+        data: { 
+            status,
+            isDeleted: status === UserStatus.DELETED
+        }
     });
 };
 
 const getMyNotifications = async (userId: string) => {
     return await prisma.notification.findMany({
-        where: {
-            userId,
-        },
-        orderBy: {
-            createdAt: 'desc',
-        },
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+    });
+};
+
+const markNotificationAsRead = async (id: string) => {
+    const notification = await prisma.notification.findUnique({ where: { id } });
+    if (!notification) throw new AppError(httpStatus.NOT_FOUND, "Notification not found!");
+
+    return await prisma.notification.update({
+        where: { id },
+        data: { isRead: true }
     });
 };
 
@@ -161,5 +151,6 @@ export const UserService = {
     getUserDashboardStats,
     getAllUsers,
     changeUserStatus,
-    getMyNotifications
+    getMyNotifications,
+    markNotificationAsRead
 };

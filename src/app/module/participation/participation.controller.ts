@@ -55,6 +55,20 @@ const getSingleParticipation = catchAsync(async (req: Request, res: Response) =>
     });
 });
 
+const getEventParticipants = catchAsync(async (req: Request, res: Response) => {
+    const { eventId } = req.params;
+    const user = (req as any).user; 
+
+    const result = await ParticipationService.getEventParticipants(eventId as string, user.id, user.role);
+
+    sendResponse(res, {
+        statusCode: status.OK,
+        success: true,
+        message: "Participants fetched successfully",
+        data: result
+    });
+});
+
 const updateStatus = catchAsync(async (req: Request, res: Response) => {
     const { id } = req.params;
     const result = await ParticipationService.updateStatus(id as string, req.body);
@@ -83,6 +97,7 @@ export const ParticipationController = {
     getMyParticipations,
     getAllParticipations,
     getSingleParticipation,
+    getEventParticipants,
     updateStatus,
     cancelParticipation
 };

@@ -49,6 +49,11 @@ const globalErrorHandler = (err: any, req: Request, res: Response, next: NextFun
             }
         ];
     }
+    else if (err.code === 'P2002') {
+    statusCode = status.CONFLICT;
+    message = "Duplicate entry detected!";
+    errorSources = [{ path: '', message: err.message || "This record already exists." }];
+    }
     // ৪. General Error
     else if (err instanceof Error) {
         message = err.message;

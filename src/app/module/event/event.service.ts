@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import httpStatus from "http-status";
-import { Prisma, Role, EventStatus, NotificationType } from "../../../generated/prisma/client";
+import { Prisma, Role, EventStatus, NotificationType, EventType } from "../../../generated/prisma/client";
 import { prisma } from "../../lib/prisma";
 import { IEvent, IEventFilterRequest } from "./event.interface";
 import AppError from "../../errorHelpers/appError";
@@ -62,12 +62,13 @@ const createEvent = async (payload: IEvent, imageUrls: string[]) => {
 // 2. Advanced Filtering and Searching
 const getAllEvents = async (filters: IEventFilterRequest, options: any) => {
     const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = options;
-    const { searchTerm, categoryId, minPrice, maxPrice, status, ...filterData } = filters;
+    
+    const { searchTerm, categoryId, minPrice, maxPrice, status, type, ...filterData } = filters;
+    const cost = (filters as any).cost;
 
     const skip = (Number(page) - 1) * Number(limit);
     const andConditions: Prisma.EventWhereInput[] = [];
 
-    // Search Logic: Multiple field searching
     if (searchTerm) {
         andConditions.push({
             OR: [
@@ -78,13 +79,23 @@ const getAllEvents = async (filters: IEventFilterRequest, options: any) => {
         });
     }
 
-    // Filter Logic: Public visibility and status
-    andConditions.push({ isPublished: true });
+    andConditions.push({ isPublished: true, isDeleted: false });
 
+    // 3. Specific Filters
     if (categoryId) andConditions.push({ categoryId });
     if (status) andConditions.push({ status: status as EventStatus });
+    
+    if (type) andConditions.push({ type: type as EventType });
 
-    // Price Range Logic
+    // 5. Cost Filter (Free/Paid)
+    if (cost) {
+        if (cost === 'FREE') {
+            andConditions.push({ registrationFee: 0 });
+        } else if (cost === 'PAID') {
+            andConditions.push({ registrationFee: { gt: 0 } });
+        }
+    }
+
     if (minPrice || maxPrice) {
         andConditions.push({
             registrationFee: {
@@ -120,7 +131,15 @@ const getAllEvents = async (filters: IEventFilterRequest, options: any) => {
     const total = await prisma.event.count({ where: whereConditions });
     const totalPage = Math.ceil(total / Number(limit));
 
-    return { meta: { page: Number(page), limit: Number(limit), total, totalPage }, data: result };
+    return { 
+        meta: { 
+            page: Number(page), 
+            limit: Number(limit), 
+            total, 
+            totalPage 
+        }, 
+        data: result 
+    };
 };
 
 const getSingleEvent = async (identifier: string) => {
@@ -165,17 +184,20 @@ const updateEvent = async (id: string, user: { id: string, role: Role }, payload
     });
 };
 
-// 5. Protected Delete Even
+// 5. Protected Delete Event (Soft Delete Implementation)
 const deleteEvent = async (id: string, user: { id: string, role: Role }) => {
+   
     const event = await prisma.event.findUniqueOrThrow({
         where: { id },
         include: {
-            images: true,
             _count: { select: { participations: true } }
         }
     });
+ if (event.isDeleted) {
+        throw new AppError(httpStatus.BAD_REQUEST, "This event is already deleted.");
+    }
 
-    if (user.role !== Role.ADMIN && event.organizerId !== user.id) {
+   if (user.role !== Role.ADMIN && event.organizerId !== user.id) {
         throw new AppError(httpStatus.FORBIDDEN, "Unauthorized deletion attempt");
     }
 
@@ -183,8 +205,12 @@ const deleteEvent = async (id: string, user: { id: string, role: Role }) => {
         throw new AppError(httpStatus.BAD_REQUEST, "Cannot delete event with active participants. Please cancel instead.");
     }
 
-    return await prisma.event.delete({
-        where: { id }
+   return await prisma.event.update({
+        where: { id },
+        data: { 
+            isDeleted: true,
+            status: 'CANCELLED'
+        }
     });
 };
 

@@ -1,19 +1,18 @@
+
 model Payment {
   id              String        @id @default(uuid())
-  amount          Float
-  transactionId   String        @unique
+  participationId String        @unique
+  amount          Float         
+  currency        String        @default("usd") 
   paymentStatus   PaymentStatus @default(PENDING)
-  paymentDetails  Json?
-  cardType        String?
-  paidAt          DateTime?
-  valId         String?   
-  bankTranId    String?   
-  storeAmount   Float?    
-  verifySign    String?   
-  ipnResponse   Json?
+  paymentIntentId String?       @unique 
+  paymentDetails  Json?         
+  paidAt          DateTime?     
   
-  participationId String
-  participation   Participation @relation(fields: [participationId], references: [id], onDelete: Cascade)
+  transactionId String?
+  cardType      String?
+  
+  participation   Participation @relation("ParticipationPayments", fields: [participationId], references: [id], onDelete: Cascade)
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt

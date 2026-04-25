@@ -32,10 +32,11 @@ const updateMyProfile = catchAsync(async (req: Request, res: Response) => {
 
 const getDashboardStats = catchAsync(async (req: Request, res: Response) => {
     const user = (req as any).user;
+    const { startDate, endDate } = req.query; 
     let result;
 
     if (user.role === Role.ADMIN) {
-        result = await UserService.getAdminDashboardStats();
+        result = await UserService.getAdminDashboardStats(startDate as string, endDate as string);
     } else {
         result = await UserService.getUserDashboardStats(user.id);
     }
@@ -84,11 +85,24 @@ const getMyNotifications = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const markNotificationAsRead = catchAsync(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const result = await UserService.markNotificationAsRead(id as string);
+
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: "Notification marked as read",
+        data: result,
+    });
+});
+
 export const UserController = {
     getMyProfile,
     updateMyProfile,
     getDashboardStats,
     getAllUsers,
     changeUserStatus,
-    getMyNotifications
+    getMyNotifications,
+    markNotificationAsRead
 };

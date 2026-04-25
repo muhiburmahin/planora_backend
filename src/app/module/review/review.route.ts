@@ -20,6 +20,8 @@ router.get(
     ReviewController.getEventReviews
 );
 
+router.get('/:id', ReviewController.getSingleReview)
+
 router.get(
     '/stats/:eventId', 
     ReviewController.getReviewStats

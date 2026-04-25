@@ -31,6 +31,9 @@ model Event {
   updatedAt DateTime @updatedAt
 
   @@map("events")
+  @@index([organizerId]) 
+  @@index([status])     
+  @@index([slug])
 }
 
 model EventImage {

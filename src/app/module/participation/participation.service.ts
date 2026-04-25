@@ -4,7 +4,7 @@ import AppError from "../../errorHelpers/appError";
 import status from "http-status";
 import { IParticipationFilterRequest, IParticipationOptions } from "./participation.interface";
 import { NotificationService } from "../notification/notification.service";
-import { NotificationType, Prisma, RequestStatus, UserStatus } from "../../../generated/prisma/client";
+import { NotificationType, Prisma, RequestStatus, UserStatus, EventStatus, PaymentStatus } from "../../../generated/prisma/client";
 
 const joinEvent = async (userId: string, eventId: string): Promise<any> => {
     const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -13,7 +13,7 @@ const joinEvent = async (userId: string, eventId: string): Promise<any> => {
     }
 
     const event = await prisma.event.findFirst({
-        where: { id: eventId, isPublished: true, status: "UPCOMING" },
+        where: { id: eventId, isPublished: true, status: EventStatus.UPCOMING },
         include: { _count: { select: { participations: true } } }
     });
 
@@ -33,13 +33,24 @@ const joinEvent = async (userId: string, eventId: string): Promise<any> => {
     }
 
     const result = await prisma.$transaction(async (tx) => {
+        
+        if (event.type === 'PRIVATE') {
+            const hasInvitation = await tx.invitation.findFirst({
+                where: { eventId, receiverId: userId, status: RequestStatus.APPROVED } 
+            });
+            
+            if (!hasInvitation) {
+                throw new AppError(status.FORBIDDEN, "This is a private event. You need an invitation to join.");
+            }
+        }
+
+       
         const alreadyJoined = await tx.participation.findFirst({ where: { userId, eventId } });
         if (alreadyJoined) throw new AppError(status.CONFLICT, "You are already registered");
 
         const ticketNumber = `TKT-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
         const isFree = event.registrationFee === 0;
 
-        // Note: paymentStatus এখন আর Participation মডেলে নেই, তাই এখান থেকে সরানো হয়েছে
         return await tx.participation.create({
             data: {
                 userId,
@@ -53,7 +64,7 @@ const joinEvent = async (userId: string, eventId: string): Promise<any> => {
         timeout: 20000
     });
 
-    if (result && result.event) { // result.event চেক যোগ করা হয়েছে
+    if (result && result.event) { 
         try {
             await NotificationService.createNotification(
                 userId,
@@ -102,7 +113,7 @@ const getAllParticipations = async (filters: IParticipationFilterRequest, option
         include: {
             user: { select: { name: true, email: true, image: true } },
             event: { select: { title: true, date: true, venue: true, registrationFee: true } },
-            payments: true // Payment মড্যুল রিলেশন ইনক্লুড করা হয়েছে
+            payments: true
         }
     });
 
@@ -121,7 +132,33 @@ const getSingleParticipation = async (id: string) => {
     });
 };
 
-const updateStatus = async (id: string, payload: any) => { // Partial<Participation> এর বদলে any কারণ পেমেন্ট ডাটা এখানে আসতে পারে
+const getEventParticipants = async (eventId: string, userId: string, role: string) => {
+    const event = await prisma.event.findUnique({
+        where: { id: eventId },
+        select: { organizerId: true }
+    });
+
+    if (!event) {
+        throw new AppError(status.NOT_FOUND, "Event not found");
+    }
+
+    if (role !== 'ADMIN' && event.organizerId !== userId) {
+        throw new AppError(status.FORBIDDEN, "You are not authorized to view this event's participants");
+    }
+
+    const participants = await prisma.participation.findMany({
+        where: { eventId },
+        include: { 
+            user: { select: { name: true, email: true, image: true } },
+            payments: true 
+        },
+        orderBy: { createdAt: 'desc' }
+    });
+
+    return participants;
+};
+
+const updateStatus = async (id: string, payload: any) => { 
     const { status: updatedStatus } = payload;
 
     const currentRecord = await prisma.participation.findUniqueOrThrow({
@@ -129,9 +166,8 @@ const updateStatus = async (id: string, payload: any) => { // Partial<Participat
         include: { event: true, payments: true }
     });
 
-    // পেমেন্ট চেক করার লজিক আপডেট
     if (updatedStatus === RequestStatus.APPROVED && currentRecord.event.registrationFee > 0) {
-        const isPaid = currentRecord.payments.some(p => p.paymentStatus === 'PAID');
+        const isPaid = currentRecord.payments.some(p => p.paymentStatus === PaymentStatus.PAID);
         if (!isPaid) {
             throw new AppError(status.BAD_REQUEST, "Cannot approve registration without confirmed payment.");
         }
@@ -167,7 +203,7 @@ const cancelParticipation = async (userId: string, id: string) => {
         throw new AppError(status.FORBIDDEN, "Unauthorized access");
     }
 
-    const isPaid = participation.payments.some(p => p.paymentStatus === 'PAID');
+    const isPaid = participation.payments.some(p => p.paymentStatus === PaymentStatus.PAID);
     if (isPaid) {
         throw new AppError(status.BAD_REQUEST, "Paid registrations cannot be deleted.");
     }
@@ -188,6 +224,7 @@ export const ParticipationService = {
     getMyParticipations,
     getAllParticipations,
     getSingleParticipation,
+    getEventParticipants,
     updateStatus,
     cancelParticipation
 };
