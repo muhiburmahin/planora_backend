@@ -33,18 +33,25 @@ const joinEvent = async (userId: string, eventId: string): Promise<any> => {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-        
+
         if (event.type === 'PRIVATE') {
             const hasInvitation = await tx.invitation.findFirst({
-                where: { eventId, receiverId: userId, status: RequestStatus.APPROVED } 
+                where: { eventId, receiverId: userId, status: { in: [RequestStatus.APPROVED, RequestStatus.PENDING] } }
             });
-            
+
             if (!hasInvitation) {
                 throw new AppError(status.FORBIDDEN, "This is a private event. You need an invitation to join.");
             }
+
+            if (hasInvitation.status === RequestStatus.PENDING) {
+                await tx.invitation.update({
+                    where: { id: hasInvitation.id },
+                    data: { status: RequestStatus.APPROVED }
+                });
+            }
         }
 
-       
+
         const alreadyJoined = await tx.participation.findFirst({ where: { userId, eventId } });
         if (alreadyJoined) throw new AppError(status.CONFLICT, "You are already registered");
 
@@ -64,7 +71,7 @@ const joinEvent = async (userId: string, eventId: string): Promise<any> => {
         timeout: 20000
     });
 
-    if (result && result.event) { 
+    if (result && result.event) {
         try {
             await NotificationService.createNotification(
                 userId,
@@ -148,9 +155,9 @@ const getEventParticipants = async (eventId: string, userId: string, role: strin
 
     const participants = await prisma.participation.findMany({
         where: { eventId },
-        include: { 
+        include: {
             user: { select: { name: true, email: true, image: true } },
-            payments: true 
+            payments: true
         },
         orderBy: { createdAt: 'desc' }
     });
@@ -158,7 +165,7 @@ const getEventParticipants = async (eventId: string, userId: string, role: strin
     return participants;
 };
 
-const updateStatus = async (id: string, payload: any) => { 
+const updateStatus = async (id: string, payload: any) => {
     const { status: updatedStatus } = payload;
 
     const currentRecord = await prisma.participation.findUniqueOrThrow({

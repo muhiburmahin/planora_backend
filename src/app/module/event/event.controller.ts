@@ -42,28 +42,34 @@ const createEvent = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getAllEvents = catchAsync(async (req: Request, res: Response) => {
-    
+
     const filters = pick(req.query, [
-        'searchTerm', 
-        'categoryId', 
-        'type', 
-        'status', 
-        'minPrice', 
-        'maxPrice', 
-        'isOnline', 
+        'searchTerm',
+        'categoryId',
+        'type',
+        'status',
+        'minPrice',
+        'maxPrice',
+        'isOnline',
         'cost',
         'isPublished'
     ]);
-    
+
     const options = pick(req.query, ['page', 'limit', 'sortBy', 'sortOrder']);
 
     // Admins see all events (published + draft); regular users/public see only published
     const isAdmin = (req as any).user?.role === 'ADMIN';
     if (isAdmin) {
         (filters as any).isPublished = undefined; // bypass default published filter
+    } else if (filters.isPublished !== undefined) {
+        (filters as any).isPublished = parseBoolean(filters.isPublished);
     }
 
-    const result = await EventService.getAllEvents(filters, options);
+    if (filters.isOnline !== undefined) {
+        (filters as any).isOnline = parseBoolean(filters.isOnline);
+    }
+
+    const result = await EventService.getAllEvents(filters, options, req.user);
 
     sendResponse(res, {
         statusCode: httpStatus.OK,

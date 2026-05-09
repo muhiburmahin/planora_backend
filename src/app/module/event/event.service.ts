@@ -64,11 +64,10 @@ const createEvent = async (payload: IEvent, imageUrls: string[]) => {
     return newEvent;
 };
 // 2. Advanced Filtering and Searching
-const getAllEvents = async (filters: IEventFilterRequest, options: any) => {
+const getAllEvents = async (filters: IEventFilterRequest, options: any, user: { id: string; role: Role; email: string; }) => {
     const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = options;
-    
-    const { searchTerm, categoryId, minPrice, maxPrice, status, type, ...filterData } = filters;
-    const cost = (filters as any).cost;
+
+    const { searchTerm, categoryId, minPrice, maxPrice, status, type, cost, ...filterData } = filters as any;
 
     const skip = (Number(page) - 1) * Number(limit);
     const andConditions: Prisma.EventWhereInput[] = [];
@@ -96,7 +95,7 @@ const getAllEvents = async (filters: IEventFilterRequest, options: any) => {
     // 3. Specific Filters
     if (categoryId) andConditions.push({ categoryId });
     if (status) andConditions.push({ status: status as EventStatus });
-    
+
     if (type) andConditions.push({ type: type as EventType });
 
     // 5. Cost Filter (Free/Paid)
@@ -131,7 +130,24 @@ const getAllEvents = async (filters: IEventFilterRequest, options: any) => {
         where: whereConditions,
         skip,
         take: Number(limit),
-        include: {
+        select: {
+            id: true,
+            title: true,
+            slug: true,
+            shortDescription: true,
+            date: true,
+            time: true,
+            venue: true,
+            isOnline: true,
+            isFeatured: true,
+            type: true,
+            registrationFee: true,
+            status: true,
+            isPublished: true,
+            categoryId: true,
+            organizerId: true,
+            createdAt: true,
+            updatedAt: true,
             images: true,
             category: true,
             organizer: { select: { name: true, image: true } },
@@ -143,14 +159,14 @@ const getAllEvents = async (filters: IEventFilterRequest, options: any) => {
     const total = await prisma.event.count({ where: whereConditions });
     const totalPage = Math.ceil(total / Number(limit));
 
-    return { 
-        meta: { 
-            page: Number(page), 
-            limit: Number(limit), 
-            total, 
-            totalPage 
-        }, 
-        data: result 
+    return {
+        meta: {
+            page: Number(page),
+            limit: Number(limit),
+            total,
+            totalPage
+        },
+        data: result
     };
 };
 
@@ -212,18 +228,18 @@ const updateEvent = async (id: string, user: { id: string, role: Role }, payload
 
 // 5. Protected Delete Event (Soft Delete Implementation)
 const deleteEvent = async (id: string, user: { id: string, role: Role }) => {
-   
+
     const event = await prisma.event.findUniqueOrThrow({
         where: { id },
         include: {
             _count: { select: { participations: true } }
         }
     });
- if (event.isDeleted) {
+    if (event.isDeleted) {
         throw new AppError(httpStatus.BAD_REQUEST, "This event is already deleted.");
     }
 
-   if (user.role !== Role.ADMIN && event.organizerId !== user.id) {
+    if (user.role !== Role.ADMIN && event.organizerId !== user.id) {
         throw new AppError(httpStatus.FORBIDDEN, "Unauthorized deletion attempt");
     }
 
@@ -231,9 +247,9 @@ const deleteEvent = async (id: string, user: { id: string, role: Role }) => {
         throw new AppError(httpStatus.BAD_REQUEST, "Cannot delete event with active participants. Please cancel instead.");
     }
 
-   return await prisma.event.update({
+    return await prisma.event.update({
         where: { id },
-        data: { 
+        data: {
             isDeleted: true,
             status: 'CANCELLED'
         }
