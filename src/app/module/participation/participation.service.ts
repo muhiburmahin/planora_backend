@@ -112,7 +112,7 @@ const getAllParticipations = async (filters: IParticipationFilterRequest, option
         orderBy: { [sortBy as string]: sortOrder },
         include: {
             user: { select: { name: true, email: true, image: true } },
-            event: { select: { title: true, date: true, venue: true, registrationFee: true } },
+            event: { select: { title: true, date: true, time: true, venue: true, registrationFee: true, shortDescription: true } },
             payments: true
         }
     });

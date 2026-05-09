@@ -34,17 +34,18 @@ const updateMyProfile = async (userId: string, payload: IUserUpdatePayload) => {
 
 // Admin Dashboard: Performance optimized with aggregation
 const getAdminDashboardStats = async (startDate?: string, endDate?: string): Promise<IAdminDashboardStats> => {
-    const dateFilter = startDate && endDate ? { 
-        createdAt: { gte: new Date(startDate), lte: new Date(endDate) } 
+    const dateFilter = startDate && endDate ? {
+        createdAt: { gte: new Date(startDate), lte: new Date(endDate) }
     } : {};
 
-   
-    const [totalUsers, recentUsers, totalEvents, totalParticipations, revenueData] = await Promise.all([
+
+    const [totalUsers, recentUsers, totalEvents, totalReviews, totalParticipations, pendingInvitations, revenueData] = await Promise.all([
         prisma.user.count({ where: { isDeleted: false } }),
         prisma.user.count({ where: { createdAt: dateFilter.createdAt, isDeleted: false } }),
         prisma.event.count(),
+        prisma.review.count(),
         prisma.participation.count({ where: { createdAt: dateFilter.createdAt } }),
-      
+        prisma.invitation.count({ where: { status: RequestStatus.PENDING } }),
         prisma.payment.aggregate({
             where: { paymentStatus: PaymentStatus.PAID, createdAt: dateFilter.createdAt },
             _sum: { amount: true }
@@ -57,57 +58,126 @@ const getAdminDashboardStats = async (startDate?: string, endDate?: string): Pro
         select: { name: true, _count: { select: { events: true } } }
     });
 
+    // Monthly Trend (Last 6 months)
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    const monthlyEvents = await prisma.event.groupBy({
+        by: ['createdAt'],
+        where: { createdAt: { gte: sixMonthsAgo } },
+        _count: { id: true }
+    });
+
+    // Simple grouping for the trend
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthlyTrendMap: Record<string, { month: string, events: number, users: number }> = {};
+
+    // Initialize last 6 months
+    for (let i = 5; i >= 0; i--) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        const mName = months[d.getMonth()];
+        monthlyTrendMap[mName] = { month: mName, events: 0, users: 0 };
+    }
+
+    // Fill event counts
+    monthlyEvents.forEach(item => {
+        const mName = months[item.createdAt.getMonth()];
+        if (monthlyTrendMap[mName]) {
+            monthlyTrendMap[mName].events += item._count.id;
+        }
+    });
+
     return {
         summary: {
             totalUsers,
             totalEvents,
+            totalReviews,
             totalRevenue: revenueData._sum.amount || 0,
             userGrowthRate: `${userGrowthRate}%`,
-            totalParticipations
+            totalParticipations,
+            pendingInvitations
         },
         categoryDistribution,
+        monthlyTrend: Object.values(monthlyTrendMap),
         recentActivities: await prisma.participation.findMany({
-            take: 5,
+            take: 10,
             orderBy: { createdAt: 'desc' },
-            include: { user: { select: { name: true, image: true } }, event: { select: { title: true } } }
+            include: { user: { select: { name: true, image: true, email: true } }, event: { select: { title: true } } }
         })
     } as any;
 };
 
-const getUserDashboardStats = async (userId: string): Promise<IUserDashboardStats> => {
-    const [myEvents, myJoined, myReviews, pendingInvites] = await Promise.all([
-        prisma.event.count({ where: { organizerId: userId } }),
+const getUserDashboardStats = async (userId: string): Promise<any> => {
+    const [myEvents, myJoined, pendingInvites, recentParticipations] = await Promise.all([
+        prisma.event.count({ where: { organizerId: userId, isDeleted: false } }),
         prisma.participation.count({ where: { userId, status: RequestStatus.APPROVED } }),
-        prisma.review.count({ where: { userId } }),
-        prisma.invitation.count({ where: { receiverId: userId, status: RequestStatus.PENDING } })
+        prisma.invitation.count({ where: { receiverId: userId, status: RequestStatus.PENDING } }),
+        prisma.participation.findMany({
+            where: { userId },
+            take: 5,
+            orderBy: { createdAt: 'desc' },
+            include: {
+                event: {
+                    include: { category: { select: { name: true } } }
+                }
+            }
+        })
     ]);
 
-    return {
-        stats: {
-            myOrganizedEvents: myEvents,
-            myJoinedEvents: myJoined,
-            totalReviewsGiven: myReviews,
-            pendingInvitations: pendingInvites
+    const recentEvents = recentParticipations.map(p => ({
+        id: p.event.id,
+        title: p.event.title,
+        date: p.event.date,
+        time: p.event.time,
+        venue: p.event.venue,
+        shortDescription: p.event.shortDescription,
+        category: {
+            name: p.event.category.name
         },
-        upcomingEvents: await prisma.participation.findMany({
-            where: {
-                userId,
-                status: RequestStatus.APPROVED,
-                event: { date: { gte: new Date() } }
-            },
-            include: { event: true },
-            take: 3,
-            orderBy: { event: { date: 'asc' } }
-        })
+        status: p.event.status
+    }));
+
+    return {
+        totalEventsOrganized: myEvents,
+        totalJoinedEvents: myJoined,
+        pendingInvitations: pendingInvites,
+        recentEvents
     };
 };
 
-const getAllUsers = async () => {
-    return await prisma.user.findMany({
-        where: { isDeleted: false },
-        include: { profile: { select: { contactNumber: true, address: true } } },
-        orderBy: { createdAt: 'desc' },
-    });
+const getAllUsers = async (filters: any, options: any) => {
+    const { searchTerm, status, role } = filters;
+    const { limit, page } = options;
+    const skip = (page - 1) * limit;
+
+    const where: any = { isDeleted: false };
+
+    if (searchTerm) {
+        where.OR = [
+            { name: { contains: searchTerm, mode: 'insensitive' } },
+            { email: { contains: searchTerm, mode: 'insensitive' } },
+        ];
+    }
+
+    if (status) where.status = status;
+    if (role) where.role = role;
+
+    const [data, total] = await Promise.all([
+        prisma.user.findMany({
+            where,
+            include: { profile: { select: { contactNumber: true, address: true } } },
+            orderBy: { createdAt: 'desc' },
+            skip,
+            take: limit,
+        }),
+        prisma.user.count({ where }),
+    ]);
+
+    return {
+        meta: { page, limit, total, totalPage: Math.ceil(total / limit) },
+        data,
+    };
 };
 
 const changeUserStatus = async (id: string, status: UserStatus) => {
@@ -117,13 +187,26 @@ const changeUserStatus = async (id: string, status: UserStatus) => {
 
     if (!isUserExist) throw new AppError(httpStatus.NOT_FOUND, "User not found!");
 
-   
+
     return await prisma.user.update({
         where: { id },
-        data: { 
+        data: {
             status,
             isDeleted: status === UserStatus.DELETED
         }
+    });
+};
+
+const changeUserRole = async (id: string, role: any) => {
+    const isUserExist = await prisma.user.findUnique({
+        where: { id, isDeleted: false }
+    });
+
+    if (!isUserExist) throw new AppError(httpStatus.NOT_FOUND, "User not found!");
+
+    return await prisma.user.update({
+        where: { id },
+        data: { role }
     });
 };
 
@@ -151,6 +234,7 @@ export const UserService = {
     getUserDashboardStats,
     getAllUsers,
     changeUserStatus,
+    changeUserRole,
     getMyNotifications,
     markNotificationAsRead
 };

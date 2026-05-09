@@ -279,6 +279,7 @@ const changePassword = async (userId: string, payload: any) => {
 
 const refreshToken = async (token: string) => {
     if (!token) {
+        console.error("\x1b[31m[AuthService.refreshToken]\x1b[0m No token provided in cookies.");
         throw new AppError(status.UNAUTHORIZED, "Session expired, please login again!");
     }
 
@@ -292,8 +293,12 @@ const refreshToken = async (token: string) => {
             where: { id: decoded.id, isDeleted: false }
         });
 
-        if (!user || (user as any).status === 'BLOCKED') {
-            throw new AppError(status.FORBIDDEN, "User account is inactive!");
+        if (!user) {
+            throw new AppError(status.UNAUTHORIZED, "User not found or session expired!");
+        }
+
+        if ((user as any).status === 'BLOCKED') {
+            throw new AppError(status.FORBIDDEN, "User account is blocked!");
         }
 
         const jwtPayload: IJWTPayload = {
@@ -302,10 +307,15 @@ const refreshToken = async (token: string) => {
             role: user.role as any,
         };
 
-        return {
-            accessToken: tokenUtils.getAccessToken(jwtPayload)
-        };
-    } catch {
+        const accessToken = jwt.sign(jwtPayload, envVars.JWT_ACCESS_SECRET as Secret, {
+            expiresIn: envVars.JWT_ACCESS_EXPIRES_IN as any,
+        });
+
+        return { accessToken };
+    } catch (err: any) {
+        if (err?.name === 'TokenExpiredError') {
+            throw new AppError(status.UNAUTHORIZED, "Refresh token expired, please login again!");
+        }
         throw new AppError(status.UNAUTHORIZED, "Invalid refresh token!");
     }
 };

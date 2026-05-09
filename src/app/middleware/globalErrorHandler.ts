@@ -54,7 +54,13 @@ const globalErrorHandler = (err: any, req: Request, res: Response, next: NextFun
     message = "Duplicate entry detected!";
     errorSources = [{ path: '', message: err.message || "This record already exists." }];
     }
-    // ৪. General Error
+    // ৫. Cloudinary Error Handling
+    else if (err.http_code === 401 || err.http_code === 400) {
+        statusCode = err.http_code;
+        message = `Cloudinary Error: ${err.message}`;
+        errorSources = [{ path: 'image', message: err.message }];
+    }
+    // ৬. General Error
     else if (err instanceof Error) {
         message = err.message;
         stack = err.stack;

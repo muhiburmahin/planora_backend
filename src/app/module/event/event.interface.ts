@@ -18,6 +18,7 @@ export type IEvent = {
     time: string;
     venue: string;
     isOnline: boolean;
+    isFeatured: boolean;
     type: EventType;
     registrationFee: number;
     maxParticipants?: number;
@@ -25,4 +26,5 @@ export type IEvent = {
     isPublished: boolean;
     organizerId: string;
     categoryId: string;
+    images?: string[];
 };

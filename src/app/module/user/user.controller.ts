@@ -50,13 +50,24 @@ const getDashboardStats = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getAllUsers = catchAsync(async (req: Request, res: Response) => {
-    const result = await UserService.getAllUsers();
+    const filters = {
+        searchTerm: req.query.searchTerm,
+        status: req.query.status,
+        role: req.query.role,
+    };
+    const options = {
+        limit: Number(req.query.limit) || 10,
+        page: Number(req.query.page) || 1,
+    };
+
+    const result = await UserService.getAllUsers(filters, options);
 
     sendResponse(res, {
         statusCode: httpStatus.OK,
         success: true,
         message: "All users retrieved successfully",
-        data: result,
+        meta: result.meta,
+        data: result.data,
     });
 });
 
@@ -69,6 +80,19 @@ const changeUserStatus = catchAsync(async (req: Request, res: Response) => {
         statusCode: httpStatus.OK,
         success: true,
         message: "User status updated successfully",
+        data: result,
+    });
+});
+
+const changeUserRole = catchAsync(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { role } = req.body;
+    const result = await UserService.changeUserRole(id as string, role);
+
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: "User role updated successfully",
         data: result,
     });
 });
@@ -103,6 +127,7 @@ export const UserController = {
     getDashboardStats,
     getAllUsers,
     changeUserStatus,
+    changeUserRole,
     getMyNotifications,
     markNotificationAsRead
-};
+};

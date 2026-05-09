@@ -34,6 +34,11 @@ router.patch('/:id/status',
     UserController.changeUserStatus
 );
 
+router.patch('/:id/role',
+    auth(Role.ADMIN),
+    UserController.changeUserRole
+);
+
 router.get('/notifications',
     auth(Role.USER, Role.ADMIN),
     UserController.getMyNotifications

@@ -11,29 +11,19 @@ import { auth } from "../../lib/auth";
 const cookieOptions = {
     secure: envVars.NODE_ENV === 'production',
     httpOnly: true,
-    sameSite: 'none' as const,
+    sameSite: envVars.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
+    path: '/',
 };
 
 const registerUser = catchAsync(async (req: Request, res: Response) => {
     const result = await AuthService.registerUser(req.body);
-
-    const { accessToken, refreshToken } = result;
-
-    res.cookie('accessToken', accessToken, {
-        ...cookieOptions,
-        maxAge: 1000 * 60 * 60 * 24
-    });
-
-    res.cookie('refreshToken', refreshToken, {
-        ...cookieOptions,
-        maxAge: 1000 * 60 * 60 * 24 * 30
-    });
+    const { accessToken: _accessToken, refreshToken: _refreshToken, ...safeResult } = result as any;
 
     sendResponse(res, {
         statusCode: httpStatus.CREATED,
         success: true,
         message: "User registered successfully. Please check your email for verification.",
-        data: result,
+        data: safeResult,
     });
 });
 

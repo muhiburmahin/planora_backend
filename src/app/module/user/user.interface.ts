@@ -14,9 +14,10 @@ export type IAdminDashboardStats = {
         totalReviews: number;
         totalParticipations: number;
         totalRevenue: number;
+        userGrowthRate: string;
     };
     categoryDistribution: { name: string; _count: { events: number } }[];
-    monthlyRevenue: { month: string; total: number }[];
+    monthlyTrend: { month: string; events: number; users: number }[];
     recentActivities: any[];
 };
 

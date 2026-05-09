@@ -225,6 +225,43 @@ const deleteReviewByAdmin = async (reviewId: string) => {
     });
 };
 
+const getAllReviews = async (filters: any, options: any) => {
+    const { searchTerm, rating } = filters;
+    const { limit, page } = options;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+
+    if (searchTerm) {
+        where.OR = [
+            { comment: { contains: searchTerm, mode: 'insensitive' } },
+            { user: { name: { contains: searchTerm, mode: 'insensitive' } } },
+            { event: { title: { contains: searchTerm, mode: 'insensitive' } } },
+        ];
+    }
+
+    if (rating) where.rating = Number(rating);
+
+    const [data, total] = await Promise.all([
+        prisma.review.findMany({
+            where,
+            include: {
+                user: { select: { name: true, image: true, email: true } },
+                event: { select: { title: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+            skip,
+            take: limit,
+        }),
+        prisma.review.count({ where }),
+    ]);
+
+    return {
+        meta: { page, limit, total, totalPage: Math.ceil(total / limit) },
+        data,
+    };
+};
+
 export const ReviewService = {
     createReview,
     getEventReviews,
@@ -233,5 +270,6 @@ export const ReviewService = {
     getSingleReview,
     updateReview,
     deleteReview,
-    deleteReviewByAdmin
+    deleteReviewByAdmin,
+    getAllReviews
 };

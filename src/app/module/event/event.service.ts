@@ -15,7 +15,11 @@ const generateSlug = (title: string) => {
 // 1. Create Event with Business Logic
 const createEvent = async (payload: IEvent, imageUrls: string[]) => {
 
-    if (new Date(payload.date) < new Date()) {
+    const eventDate = new Date(payload.date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set to start of today
+
+    if (eventDate < today) {
         throw new AppError(httpStatus.BAD_REQUEST, "Event date cannot be in the past");
     }
 
@@ -34,15 +38,15 @@ const createEvent = async (payload: IEvent, imageUrls: string[]) => {
     const slug = generateSlug(payload.title);
 
     const newEvent = await prisma.$transaction(async (tx) => {
-        const { ...eventData } = payload;
+        const { images, ...eventData } = payload;
 
         return await tx.event.create({
             data: {
                 ...eventData,
                 slug,
-                images: {
+                images: imageUrls && imageUrls.length > 0 ? {
                     create: imageUrls.map((url) => ({ url }))
-                },
+                } : undefined
             },
             include: { images: true, category: true },
         });
@@ -79,7 +83,15 @@ const getAllEvents = async (filters: IEventFilterRequest, options: any) => {
         });
     }
 
-    andConditions.push({ isPublished: true, isDeleted: false });
+    // Default to published only if not explicitly requested otherwise
+    const isPublishedFilter = (filters as any).isPublished;
+    if (isPublishedFilter === undefined || isPublishedFilter === null) {
+        // Admin bypass — no isPublished filter, show all events
+    } else {
+        andConditions.push({ isPublished: isPublishedFilter === true || isPublishedFilter === 'true' });
+    }
+
+    andConditions.push({ isDeleted: false });
 
     // 3. Specific Filters
     if (categoryId) andConditions.push({ categoryId });
@@ -164,7 +176,7 @@ const getSingleEvent = async (identifier: string) => {
 };
 
 // 4. Update Event with Authorization
-const updateEvent = async (id: string, user: { id: string, role: Role }, payload: Partial<IEvent>) => {
+const updateEvent = async (id: string, user: { id: string, role: Role }, payload: Prisma.EventUpdateInput) => {
     const event = await prisma.event.findUniqueOrThrow({ where: { id } });
 
     // Logic: Only Admin or the specific Organizer can update
@@ -173,8 +185,22 @@ const updateEvent = async (id: string, user: { id: string, role: Role }, payload
     }
 
     // Logic: Update slug if title changes
-    if (payload.title && payload.title !== event.title) {
+    if (typeof payload.title === 'string' && payload.title !== event.title) {
         (payload as any).slug = generateSlug(payload.title);
+    }
+
+    // Validate and handle images
+    if (payload.images && Array.isArray(payload.images)) {
+        const imageList = payload.images;
+        (payload as any).images = {
+            deleteMany: {},
+            create: imageList.map((image: any) => {
+                if (typeof image === 'string') {
+                    return { url: image };
+                }
+                return { url: image.url };
+            })
+        };
     }
 
     return await prisma.event.update({

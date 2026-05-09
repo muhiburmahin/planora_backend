@@ -119,6 +119,27 @@ const deleteReviewByAdmin = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const getAllReviews = catchAsync(async (req: Request, res: Response) => {
+    const filters = {
+        searchTerm: req.query.searchTerm,
+        rating: req.query.rating,
+    };
+    const options = {
+        limit: Number(req.query.limit) || 10,
+        page: Number(req.query.page) || 1,
+    };
+
+    const result = await ReviewService.getAllReviews(filters, options);
+
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: "All reviews retrieved successfully",
+        meta: result.meta,
+        data: result.data,
+    });
+});
+
 export const ReviewController = {
     createReview,
     getEventReviews,
@@ -127,5 +148,6 @@ export const ReviewController = {
     getMyReviews,
     updateReview,
     deleteReview,
-    deleteReviewByAdmin
+    deleteReviewByAdmin,
+    getAllReviews
 };

@@ -55,4 +55,10 @@ router.delete(
     ReviewController.deleteReviewByAdmin
 );
 
+router.get(
+    '/admin/all',
+    auth(Role.ADMIN),
+    ReviewController.getAllReviews
+);
+
 export const ReviewRoutes = router;

@@ -12,7 +12,7 @@ const createParticipation = z.object({
 const updateStatus = z.object({
     body: z.object({
         status: z
-            .enum(["PENDING", "APPROVED", "REJECTED", "BANNED"], {
+            .enum(["PENDING", "APPROVED", "REJECTED", "BANNED", "CANCELLED"], {
                 message: "Invalid status value",
             })
             .optional(),

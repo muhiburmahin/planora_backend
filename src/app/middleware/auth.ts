@@ -42,3 +42,27 @@ const auth = (...roles: string[]) => {
 };
 
 export default auth;
+
+// Optional auth: sets req.user if token is present, but does NOT block the request
+export const optionalAuth = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const authHeader = req.headers.authorization;
+        let token: string | undefined;
+
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            token = authHeader.split(' ')[1];
+        } else if (req.cookies?.accessToken) {
+            token = req.cookies.accessToken;
+        }
+
+        if (token) {
+            const result = jwtUtils.verifyToken(token, envVars.JWT_ACCESS_SECRET as string);
+            if (result.success) {
+                req.user = result.data as any;
+            }
+        }
+    } catch {
+        // Silently ignore — optional auth never blocks
+    }
+    next();
+};
