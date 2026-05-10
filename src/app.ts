@@ -17,7 +17,7 @@ app.set("view engine", "ejs");
 app.set("views", path.resolve(process.cwd(), `src/app/templates`));
 
 app.use(cors({
-    origin: ["http://localhost:3000", "http://localhost:5000"],
+    origin: [process.env.FRONTEND_URL as string, "http://localhost:3000", "http://localhost:5000"],
     credentials: true
 }));
 
